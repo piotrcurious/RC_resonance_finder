@@ -149,16 +149,6 @@ float binary_search() {
   return fmid;
 }
   
-  // Check if accuracy threshold is reached
-  if (fmax - fmin < epsilon) {
-    // Return midpoint as resonant frequency
-    return fmid;
-  }
-  else {
-    // Repeat binary search recursively
-    return binary_search();
-  }
-}
 
 // Calculate impedance of second capacitor using frequency and capacitance
 float impedance(float freq, float cap) {
