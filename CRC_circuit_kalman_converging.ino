@@ -47,21 +47,26 @@ void pulse(float freq, float len) {
   float period = 1000000 / freq;
   float half_period = period / 2;
   
-  // Set digital pin to HIGH for half-period
-  digitalWrite(DIGITAL_PIN, HIGH);
-  delayMicroseconds(half_period);
-  
-  // Set digital pin to LOW for half-period
-  digitalWrite(DIGITAL_PIN, LOW);
-  delayMicroseconds(half_period);
-  
-  // Repeat until length is reached
-  len -= period;
-  if (len > 0) {
-    // Call pulse function recursively
-    pulse(freq, len);
+  // Repeat until length is zero or negative
+  while (len > 0) {
+    // Set digital pin to HIGH for half-period
+    digitalWrite(DIGITAL_PIN, HIGH);
+    delayMicroseconds(half_period);
+    
+    // Set digital pin to LOW for half-period
+    digitalWrite(DIGITAL_PIN, LOW);
+    delayMicroseconds(half_period);
+    
+    // Subtract period from length
+    len -= period;
+    
+    // Break if length becomes negative
+    if (len < 0) {
+      break;
+    }
   }
 }
+
 
 // Measure voltage across second capacitor using analog pin
 float measure() {
@@ -109,26 +114,40 @@ void measure_impedance(float freq) {
 
 // Perform binary search to find resonant frequency
 float binary_search() {
-  // Calculate midpoint of frequency range
+  // Calculate initial midpoint of frequency range
   fmid = (fmin + fmax) / 2;
   
-  // Generate a pulse with midpoint frequency and measure voltage
+  // Generate a pulse with initial midpoint frequency and measure voltage
   pulse(fmid, 0.1);
   Vc2 = measure();
   
-  // Generate a pulse with midpoint plus one frequency and measure voltage
-  pulse(fmid + 1, 0.1);
-  float Vc2_plus = measure();
+  // Repeat until accuracy threshold is reached
+  while (fmax - fmin >= epsilon) {
+    // Generate a pulse with midpoint plus one frequency and measure voltage
+    pulse(fmid + 1, 0.1);
+    float Vc2_plus = measure();
+    
+    // Compare voltages and update frequency range
+    if (Vc2_plus > Vc2) {
+      // Maximum voltage is in upper half of range
+      fmin = fmid;
+    }
+    else {
+      // Maximum voltage is in lower half of range
+      fmax = fmid;
+    }
+    
+    // Calculate new midpoint of frequency range
+    fmid = (fmin + fmax) / 2;
+    
+    // Generate a pulse with new midpoint frequency and measure voltage
+    pulse(fmid, 0.1);
+    Vc2 = measure();
+  }
   
-  // Compare voltages and update frequency range
-  if (Vc2_plus > Vc2) {
-    // Maximum voltage is in upper half of range
-    fmin = fmid;
-  }
-  else {
-    // Maximum voltage is in lower half of range
-    fmax = fmid;
-  }
+  // Return midpoint as resonant frequency
+  return fmid;
+}
   
   // Check if accuracy threshold is reached
   if (fmax - fmin < epsilon) {
