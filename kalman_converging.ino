@@ -3,6 +3,11 @@
 // Based on https://www.instructables.com/Arduino-Resistance-Measurement/ and https://github.com/rfetick/Kalman
 
 #include <Kalman.h> // Kalman filter library
+//There are several Kalman filter libraries for Arduino that you can use for your project, such as Kalman Filter Library¹, Kalman² and SimpleKalmanFilter³. They all claim to be compatible with all architectures, so you should be able to use them on any Arduino board. However, I cannot guarantee that they will work without any errors, as there may be some compatibility issues with different versions of Arduino IDE or BasicLinearAlgebra library. You may need to test and debug them yourself or contact the authors for support. I hope this helps.
+
+//Source: Conversation with Bing, 4/11/2023(1) Kalman Filter Library - Arduino Reference. http://reference.arduino.cc/reference/en/libraries/kalman-filter-library/ Accessed 4/11/2023.
+//(2) Kalman - Arduino Reference. https://reference.arduino.cc/reference/en/libraries/kalman/ Accessed 4/11/2023.
+//(3) SimpleKalmanFilter - Arduino Reference. https://reference.arduino.cc/reference/en/libraries/simplekalmanfilter/ Accessed 4/11/2023.
 
 // Define the pins for the RC circuit
 const int analogPin = A0; // Analog input pin for measuring voltage across capacitor
