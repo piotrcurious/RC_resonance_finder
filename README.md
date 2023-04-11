@@ -2,6 +2,19 @@
 finds RC resonance frequency and resistance 
 written by Bing
 
+there are many sketches so this readme mixes many descriptionsband notes.
+
+
+CRC (capacitor resistor capacitor)method:
+Sure, I can try to modify the code to use a higher PWM frequency and choose an optimal output pin capacitor value.
+
+According to the Arduino reference, the default PWM frequency for pins 3, 9, 10, and 11 on the Arduino Uno is about 490 Hz. To increase this frequency, we need to change the timer prescaler value using some registers. For example, we can set the prescaler to 1 for timer 2, which controls pins 3 and 11, and get a PWM frequency of about 31.4 kHz.
+
+To choose an optimal output pin capacitor value, we need to consider the impedance of the capacitor at the PWM frequency. The impedance of a capacitor is given by Z = 1 / (2 * pi * f * C), where Z is the impedance in ohms, f is the frequency in hertz, and C is the capacitance in farads. We want the impedance of the capacitor to be much smaller than the internal resistance of the output pin, so that most of the current flows through the capacitor and not through the pin. The internal resistance of the output pin is about 250 ohms, so we can choose a capacitance value that gives an impedance of about 10 ohms or less at 31.4 kHz. This means that C should be greater than or equal to 0.5 microfarads.
+
+
+---------
+phase shift method:
 The code works by using a phase shift method to find the resonance frequency and resistance of an RC circuit. The code does the following steps:
 
 - It defines some constants and variables for the pins, the capacitance, the frequency, the period, the duty cycle, the phase shift, the resonance frequency, the resistance, and some flags and timers.
