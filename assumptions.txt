@@ -1,0 +1,164 @@
+OK, I will use delays instead of PWM to generate the pulses. Here is the updated summary of the task:
+
+- The series RC circuit consists of two RC subcircuits connected to a digital pin of the Arduino.
+- The first RC subcircuit has a known resistor R1 = 1 ohm and a known capacitor C1 = 0.5 uF.
+- The second RC subcircuit has an unknown resistor R2 and a known capacitor C2 = 10 uF.
+- The digital pin has an internal resistance defined by a maximum current of 20 mA, which implies R0 = 5V / 0.02A = 250 ohms.
+- The Arduino can read the voltage across C2 using the analog input pin A0, which has a resolution of 10 bits and a reference voltage of 5V.
+- The Arduino can generate pulses of variable length and frequency using the digitalWrite() and delay() functions, which have a resolution of microseconds.
+- The pulses are used to charge and discharge the capacitors and measure the impedance of the RC subcircuits by using Kirchhoff's voltage law.
+- The impedance of each RC subcircuit depends on the frequency of the pulses, and there is a resonant frequency for each subcircuit that maximizes the voltage across C2.
+- The resonant frequency of each RC subcircuit is inversely proportional to the product of R and C, which means that the first subcircuit has a higher resonant frequency than the second subcircuit.
+- The Arduino can use a binary search algorithm to find the resonant frequency of each subcircuit, starting from the last resonant frequency as a seed for the next attempt.
+- The Arduino can use a Kalman filter to estimate the value of R2 based on the voltage readings from A0, taking into account the noise sources and the orthogonality of the variables in the equations used to calculate R2.
+- The Arduino code should work as a function that is called every 60 seconds to check if R2 has changed.
+
+Now, let me explain how to construct the model of the circuit and determine possible strategies for making necessary measurements. 
+
+The model of the circuit is shown in the figure below. It consists of three resistors (R0, R1, and R2) and two capacitors (C1 and C2) connected in series between Vcc (5V) and GND. The digital pin is connected to the junction between R0 and R1, and can be set to HIGH or LOW to generate pulses. The analog pin is connected to the junction between R2 and C2, and can measure the voltage across C2.
+
+![RC circuit model](https://i.imgur.com/6QZyXx9.png)
+
+The goal is to find the value of R2 by measuring the voltage across C2 as a function of time and frequency. To do this, we need to apply Kirchhoff's voltage law, which states that the sum of all voltages around a closed loop is zero. In this case, we have two loops: one that includes Vcc, R0, R1, and C1, and another that includes Vcc, R0, R2, and C2. Applying Kirchhoff's law to each loop, we get:
+
+Vcc - R0 * I - R1 * I - Vc1 = 0
+Vcc - R0 * I - R2 * I - Vc2 = 0
+
+where I is the current flowing through the circuit, Vc1 is the voltage across C1, and Vc2 is the voltage across C2. Solving for Vc2, we get:
+
+Vc2 = Vcc - R0 * I - R2 * I
+
+We can also express Vc2 in terms of its impedance Zc2, which is given by:
+
+Zc2 = 1 / (j * w * C2)
+
+where j is the imaginary unit, w is the angular frequency (w = 2 * pi * f), f is the frequency of the pulses, and C2 is the capacitance of C2. Using Ohm's law (V = I * Z), we get:
+
+Vc2 = I * Zc2
+
+Equating these two expressions for Vc2, we get:
+
+Vcc - R0 * I - R2 * I = I * Zc2
+
+Solving for I, we get:
+
+I = Vcc / (R0 + R2 + Zc2)
+
+Substituting this value of I into either equation for Vc2, we get:
+
+Vc2 = Vcc * Zc2 / (R0 + R2 + Zc2)
+
+This equation relates V
+OK, I will continue with the explanation. The equation for Vc2 shows that the voltage across C2 depends on the frequency of the pulses, as well as the values of R0, R2, and C2. If we know the values of R0 and C2, we can use this equation to find R2 by measuring Vc2 at different frequencies and solving for R2. However, this equation is nonlinear and complex, so it is not easy to solve for R2 analytically. A better approach is to use a numerical method, such as a binary search algorithm, to find the frequency that maximizes Vc2, and then use that frequency to calculate R2.
+
+The binary search algorithm works by dividing the range of possible frequencies into two halves, and testing which half contains the maximum value of Vc2. It then repeats this process on the selected half, until it converges to a single frequency value. The algorithm can be implemented as follows:
+
+- Define a lower bound (fmin) and an upper bound (fmax) for the frequency range. For example, fmin = 1 Hz and fmax = 1000 Hz.
+- Calculate the midpoint (fmid) of the range by averaging fmin and fmax. For example, fmid = (fmin + fmax) / 2 = 500.5 Hz.
+- Generate a pulse with frequency fmid and measure Vc2 using analogRead(A0).
+- Generate a pulse with frequency fmid + 1 and measure Vc2 using analogRead(A0).
+- Compare the two values of Vc2. If Vc2(fmid + 1) > Vc2(fmid), then the maximum value of Vc2 is in the upper half of the range. Set fmin = fmid and repeat steps 2-5. If Vc2(fmid + 1) < Vc2(fmid), then the maximum value of Vc2 is in the lower half of the range. Set fmax = fmid and repeat steps 2-5.
+- Stop when fmax - fmin < epsilon, where epsilon is a small positive number that defines the accuracy of the algorithm. For example, epsilon = 0.01 Hz.
+
+Once we have found the frequency that maximizes Vc2, we can use it to calculate R2 by rearranging the equation for Vc2:
+
+R2 = (Vcc * Zc2 / Vc2) - R0 - Zc2
+
+However, this calculation may not be very accurate, because there are noise sources in the measurement of Vc2, such as thermal noise, quantization noise, and environmental noise. To improve the accuracy of R2 estimation, we can use a Kalman filter, which is a recursive algorithm that combines a prediction model and a measurement model to produce an optimal estimate of R2 based on all previous measurements.
+
+The Kalman filter works by maintaining two variables: a state vector x and a state covariance matrix P. The state vector x contains the estimate of R2 and its uncertainty. The state covariance matrix P contains the error covariance of x and its correlation with other variables. The Kalman filter updates these variables every time a new measurement of Vc2 is available, using four steps:
+
+- Prediction: The prediction step uses a model of how R2 changes over time to predict its next value and uncertainty. In this case, we can assume that R2 does not change much over time, unless there is some external factor that affects it, such as temperature or humidity. Therefore, we can use a simple model that says x(k+1) = x(k), where k is the time step index. The prediction step also increases the uncertainty of x by adding some process noise Q, which represents the variability of R
+OK, I will continue with the explanation. The remaining steps of the Kalman filter are:
+
+- Update: The update step uses a new measurement of Vc2 to correct the prediction of x and reduce its uncertainty. To do this, it needs a measurement model that relates Vc2 to x, which is the equation we derived earlier:
+
+Vc2 = Vcc * Zc2 / (R0 + x + Zc2)
+
+The update step also needs a measurement noise R, which represents the variability of Vc2 due to noise sources. The update step calculates a residual y, which is the difference between the actual measurement and the predicted measurement:
+
+y = Vc2 - (Vcc * Zc2 / (R0 + x + Zc2))
+
+The update step then calculates a residual covariance S, which is the sum of the predicted error covariance and the measurement noise:
+
+S = P + R
+
+The update step then calculates a Kalman gain K, which is a factor that determines how much the measurement affects the state estimate:
+
+K = P / S
+
+The update step then updates the state estimate x by adding the product of the Kalman gain and the residual:
+
+x = x + K * y
+
+The update step also updates the state covariance P by subtracting the product of the Kalman gain and the residual covariance:
+
+P = P - K * S
+
+- Output: The output step returns the updated state estimate x as the optimal estimate of R2.
+
+- Repeat: The repeat step repeats the prediction and update steps every time a new measurement of Vc2 is available, using the previous state estimate and covariance as inputs.
+
+To write the Arduino code for this task, we need to define some constants and variables, such as:
+
+- The pin numbers for the digital and analog pins
+- The values of R0, C1, C2, Vcc, and epsilon
+- The initial values of fmin, fmax, fmid, and Vc2
+- The initial values of x, P, Q, and R
+- A timer variable to keep track of when to call the function
+
+We also need to write some functions, such as:
+
+- A function to generate a pulse with a given frequency and length
+- A function to measure Vc2 using analogRead()
+- A function to perform binary search to find the resonant frequency
+- A function to calculate Zc2 using frequency and capacitance
+- A function to perform Kalman filter to estimate R2
+- A function to call all these functions every 60 seconds
+
+Here is an example of how the Arduino code could look like:
+
+```cpp
+// Define pin numbers
+const int DIGITAL_PIN = 3; // Digital pin for generating pulses
+const int ANALOG_PIN = A0; // Analog pin for measuring voltage
+
+// Define component values
+const float R0 = 250; // Internal resistance of digital pin in ohms
+const float C1 = 0.5e-6; // Capacitance of first capacitor in farads
+const float C2 = 10e-6; // Capacitance of second capacitor in farads
+const float Vcc = 5; // Supply voltage in volts
+const float epsilon = 0.01; // Accuracy threshold for binary search in hertz
+
+// Define initial values for binary search
+float fmin = 1; // Lower bound for frequency range in hertz
+float fmax = 1000; // Upper bound for frequency range in hertz
+float fmid; // Midpoint for frequency range in hertz
+float Vc2; // Voltage across second capacitor in volts
+
+// Define initial values for Kalman filter
+float x = 1000; // Initial estimate of unknown resistance in ohms
+float P = 1000000; // Initial error covariance of estimate in ohms^2
+float Q = 1000; // Process noise covariance in ohms^2
+float R = 0.01; // Measurement noise covariance in volts^2
+
+// Define timer variable
+unsigned long timer = 0; // Timer for calling function in milliseconds
+
+// Generate a pulse with a given frequency and length
+void pulse(float freq, float len) {
+  // Calculate period and half-period in microseconds
+  float period = 1000000 / freq;
+  float half_period = period / 2;
+  
+  // Set digital pin to HIGH for half-period
+  digitalWrite(DIGITAL_PIN, HIGH);
+  delayMicroseconds(half_period);
+  
+  // Set digital pin to LOW for half-period
+  digitalWrite(DIGITAL_PIN, LOW);
+  delayMicroseconds(half_period);
+  
+  // Repeat until length is reached
+  len -= period;
+  if (len > 0) {
