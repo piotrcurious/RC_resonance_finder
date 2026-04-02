@@ -1,74 +1,77 @@
-//prompt
-//create Arduino code trying to find value of resistor used in RC circuit connected to digital output pin with internal resistance defined by max current of 20mA. Use strategy of iterating sending various lenght pulses to RC circuit and measure change of resistance of RC circuit by using kirhoff law to find pulse length corresponding to frequency providing maximum analog voltage reading . Assume known capacitance of 10uF. Assume Arduino can read voltage across capacitor by using A0 analog input pin . The resistance finding code should work as a function and be called each 60 seconds to check if resistance did change . Include explainations of equations in comments.
-// Define constants and variables
-const int outputPin = 9; // digital output pin connected to RC circuit
-const int inputPin = A0; // analog input pin connected to capacitor
-const float capacitance = 10e-6; // capacitance of capacitor in farads
-const float maxCurrent = 0.02; // maximum current in amperes
-const int maxPulse = 1000; // maximum pulse length in microseconds
-const int interval = 60000; // interval between resistance measurements in milliseconds
-float resistance; // resistance of resistor in ohms
-unsigned long previousMillis = 0; // previous time of measurement in milliseconds
+/*
+ * Resistance measurement using 2nd-order RC ladder theory (Kirchhoff approach).
+ * Pin (R0=250) -- R1(1) --+-- R2(Unknown) --+-- A0
+ *                         |                 |
+ *                        C1(0.5uF)         C2(10uF)
+ *                         |                 |
+ *                        GND               GND
+ */
+
+const int PIN_OUT = 9;
+const int PIN_IN = A0;
+
+// Known Constants
+const float R0 = 250.0;
+const float R1 = 1.0;
+const float C1 = 0.5e-6;
+const float C2 = 10.0e-6;
+const float VCC = 5.0;
 
 void setup() {
-  // Initialize serial communication
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
-  // Set output pin to low
-  pinMode(outputPin, OUTPUT);
-  digitalWrite(outputPin, LOW);
+}
+
+// Measure Vpp at a given frequency
+float measureVpp(float freq) {
+  unsigned long period = 1000000.0 / freq;
+  unsigned long halfPeriod = period / 2;
+  float vMax = 0, vMin = 5.0;
+  unsigned long start = millis();
+  while(millis() - start < 100) {
+    digitalWrite(PIN_OUT, HIGH);
+    if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
+    float v = analogRead(PIN_IN) * (VCC / 1023.0);
+    if (v > vMax) vMax = v;
+    digitalWrite(PIN_OUT, LOW);
+    if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
+    v = analogRead(PIN_IN) * (VCC / 1023.0);
+    if (v < vMin) vMin = v;
+  }
+  return vMax - vMin;
 }
 
 void loop() {
-  // Get current time in milliseconds
-  unsigned long currentMillis = millis();
-  // Check if interval has passed since last measurement
-  if (currentMillis - previousMillis >= interval) {
-    // Update previous time
-    previousMillis = currentMillis;
-    // Call function to measure resistance
-    resistance = measureResistance();
-    // Print resistance value to serial monitor
-    Serial.print("Resistance: ");
-    Serial.print(resistance);
-    Serial.println(" ohms");
-  }
-}
-
-// Function to measure resistance of RC circuit
-float measureResistance() {
-  float r; // resistance value to return
-  int maxVoltage = 0; // maximum voltage reading from analog input pin
-  int pulseLength = 0; // pulse length that gives maximum voltage reading
-  int voltage; // voltage reading from analog input pin
+  // Simple sweep to find "corner" frequency (Gain ~ 0.707)
+  float bestFreq = 1.0;
+  float minError = 5.0;
   
-  // Loop through different pulse lengths from 1 to maxPulse microseconds
-  for (int i = 1; i <= maxPulse; i++) {
-    // Set output pin to high for i microseconds
-    digitalWrite(outputPin, HIGH);
-    delayMicroseconds(i);
-    // Set output pin to low and read voltage from input pin
-    digitalWrite(outputPin, LOW);
-    voltage = analogRead(inputPin);
-    // Check if voltage is higher than previous maximum
-    if (voltage > maxVoltage) {
-      // Update maximum voltage and pulse length values
-      maxVoltage = voltage;
-      pulseLength = i;
+  for (float f = 1.0; f < 500.0; f *= 1.2) {
+    float vpp = measureVpp(f);
+    float err = abs(vpp - 3.535); // 5.0 * 0.707
+    if (err < minError) {
+      minError = err;
+      bestFreq = f;
     }
   }
+
+  // Calculate R2 using Kirchhoff/Transfer Function magnitude:
+  // gain = vpp / Vcc
+  // |H(jw)| = 1 / sqrt((1 - w^2 Ra R2 C1 C2)^2 + (w (R2 C2 + Ra C1 + Ra C2))^2)
+  float vppFinal = measureVpp(bestFreq);
+  float g = vppFinal / VCC;
+  float w = 2.0 * PI * bestFreq;
+  float Ra = R0 + R1;
   
-  // Convert maximum voltage reading to volts (assuming 5V reference)
-  float vMax = maxVoltage * (5.0 / 1023.0);
-  
-  // Calculate resistance using Kirchhoff's voltage law and Ohm's law
-  // Vout = Vin * (1 - exp(-t / (RC)))
-  // Vout / Vin = (1 - exp(-t / (RC)))
-  // ln(1 - Vout / Vin) = -t / (RC)
-  // RC = -t / ln(1 - Vout / Vin)
-  // R = -t / (C * ln(1 - Vout / Vin))
-  
-  r = -pulseLength * 1e-6 / (capacitance * log(1 - vMax / 5.0));
-  
-  // Return resistance value
-  return r;
+  // R2 = (tau - Ra(C1+C2))/C2 where tau approx 1/(w*sqrt(1/g^2 - 1))
+  float ratio = 1.0/g;
+  if (ratio > 1.0) {
+    float tau = sqrt(ratio*ratio - 1.0) / w;
+    float r2 = (tau - Ra*(C1+C2)) / C2;
+    Serial.print("Freq: "); Serial.print(bestFreq);
+    Serial.print(" Hz, Measured R2: "); Serial.println(r2);
+  }
+
+  delay(60000);
 }
