@@ -1,103 +1,60 @@
+/*
+ * Frequency-Sweep measurement using 'tone()' for 2nd-order RC circuit.
+ * Corrected to find the corner frequency where gain is 0.707.
+ */
 
-// Define the pins
-const int outputPin = 9; // Digital output pin for the RC circuit
-const int inputPin = A0; // Analog input pin for reading the voltage across the capacitor
-
-// Define the capacitance value in Farads
-const float capacitance = 10e-6;
-
-// Define the initial frequency in Hertz
-float frequency = 1000;
-
-// Define the frequency step in Hertz
-float frequencyStep = 10;
-
-// Define the threshold voltage in Volts
-const float thresholdVoltage = 2.5;
-
-// Define the timer interval in milliseconds
-const long timerInterval = 60000;
-
-// Define the variables for storing the resistance and resonance frequency
-float resistance = 0;
-float resonanceFrequency = 0;
-
-// Define the variables for storing the previous and current time
-unsigned long previousTime = 0;
-unsigned long currentTime = 0;
+#define PIN_OUT 9
+#define PIN_IN A0
+#define C1 0.5e-6
+#define C2 10e-6
+#define RA (250.0 + 1.0)
+#define V_REF 5.0
 
 void setup() {
-  // Initialize the serial monitor
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
-
-  // Set the output pin as output
-  pinMode(outputPin, OUTPUT);
-
-  // Set the initial output to low
-  digitalWrite(outputPin, LOW);
 }
 
 void loop() {
-  // Get the current time
-  currentTime = millis();
+  float maxVpp = 0;
+  float cornerFreq = 1.0;
+  float targetVpp = 3.535; // 5.0 * 0.707
 
-  // Check if the timer interval has elapsed
-  if (currentTime - previousTime >= timerInterval) {
-    // Reset the previous time
-    previousTime = currentTime;
+  // Find corner frequency (Gain = 0.707)
+  float bestFreq = 1.0;
+  float minDiff = 5.0;
 
-    // Call the function to find the resonance frequency and resistance
-    findResonance();
+  for (float f = 1.0; f < 1000.0; f *= 1.1) {
+    tone(PIN_OUT, (int)f);
+    delay(100);
+    float vpp = measureVpp(f);
+    float diff = abs(vpp - targetVpp);
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestFreq = f;
+    }
   }
+  noTone(PIN_OUT);
+
+  // w = 1 / tau_eff for corner freq
+  float w = 2.0 * PI * bestFreq;
+  float tau = 1.0 / w;
+  float r2 = (tau - RA*(C1+C2)) / C2;
+
+  Serial.print("Corner Freq: "); Serial.print(bestFreq);
+  Serial.print(" Hz, Calc R2: "); Serial.println(r2);
+  
+  delay(60000);
 }
 
-// Define the function to find the resonance frequency and resistance
-void findResonance() {
-  // Initialize a variable to store the maximum voltage
-  float maxVoltage = 0;
-
-  // Initialize a variable to store the current voltage
-  float currentVoltage = 0;
-
-  // Initialize a variable to store the current frequency
-  float currentFrequency = frequency;
-
-  // Loop until the current frequency exceeds the maximum possible frequency
-  while (currentFrequency <= F_CPU / (2 * outputPin)) {
-    // Set the output pin to generate a square wave with the current frequency
-    tone(outputPin, currentFrequency);
-
-    // Wait for one cycle to stabilize
-    delayMicroseconds(1000000 / currentFrequency);
-
-    // Read the voltage across the capacitor
-    currentVoltage = analogRead(inputPin) * (5.0 / 1023.0);
-
-    // Check if the current voltage is greater than the maximum voltage
-    if (currentVoltage > maxVoltage) {
-      // Update the maximum voltage
-      maxVoltage = currentVoltage;
-
-      // Update the resonance frequency
-      resonanceFrequency = currentFrequency;
-    }
-
-    // Increase the current frequency by the frequency step
-    currentFrequency += frequencyStep;
+float measureVpp(float f) {
+  float vMax = 0, vMin = 5.0;
+  unsigned long start = millis();
+  while(millis() - start < 50) {
+    float v = analogRead(PIN_IN) * (V_REF/1023.0);
+    if (v > vMax) vMax = v;
+    if (v < vMin) vMin = v;
   }
-
-  // Turn off the output pin
-  noTone(outputPin);
-
-  // Calculate the resistance using Ohm's law and the threshold voltage
-  resistance = (5.0 - thresholdVoltage) / (thresholdVoltage / (2 * PI * resonanceFrequency * capacitance));
-
-  // Print the results to the serial monitor
-  Serial.print("Resonance frequency: ");
-  Serial.print(resonanceFrequency);
-  Serial.println(" Hz");
-  
-  Serial.print("Resistance: ");
-  Serial.print(resistance);
-  Serial.println(" Ohms");
+  return vMax - vMin;
 }
