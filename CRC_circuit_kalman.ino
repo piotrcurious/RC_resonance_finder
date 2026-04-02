@@ -1,167 +1,81 @@
+/*
+ * Corrected Kalman filter measurement in CRC_circuit_kalman.ino.
+ * Uses 2nd-order RC ladder theory and 2nd-order Kalman filter for R2 tracking.
+ */
 
-// Define pin numbers
-const int DIGITAL_PIN = 3; // Digital pin for generating pulses
-const int ANALOG_PIN = A0; // Analog pin for measuring voltage
+#include <math.h>
 
-// Define component values
-const float R0 = 250; // Internal resistance of digital pin in ohms
-const float C1 = 0.5e-6; // Capacitance of first capacitor in farads
-const float C2 = 10e-6; // Capacitance of second capacitor in farads
-const float Vcc = 5; // Supply voltage in volts
-const float epsilon = 0.01; // Accuracy threshold for binary search in hertz
+const int PIN_OUT = 3;
+const int PIN_IN = A0;
+const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
 
-// Define initial values for binary search
-float fmin = 1; // Lower bound for frequency range in hertz
-float fmax = 1000; // Upper bound for frequency range in hertz
-float fmid; // Midpoint for frequency range in hertz
-float Vc2; // Voltage across second capacitor in volts
+// Kalman Filter variables (R2 and dR2)
+float x_state[2] = {1000.0, 0.0};
+float P_cov[2][2] = {{1e6, 0}, {0, 1e3}};
+float Q_proc[2][2] = {{10.0, 0}, {0, 1.0}};
+float R_meas = 500.0;
 
-// Define initial values for Kalman filter
-float x = 1000; // Initial estimate of unknown resistance in ohms
-float P = 1000000; // Initial error covariance of estimate in ohms^2
-float Q = 1000; // Process noise covariance in ohms^2
-float R = 0.01; // Measurement noise covariance in volts^2
-
-// Define timer variable
-unsigned long timer = 0; // Timer for calling function in milliseconds
-
-// Generate a pulse with a given frequency and length
-void pulse(float freq, float len) {
-  // Calculate period and half-period in microseconds
-  float period = 1000000 / freq;
-  float half_period = period / 2;
-  
-  // Set digital pin to HIGH for half-period
-  digitalWrite(DIGITAL_PIN, HIGH);
-  delayMicroseconds(half_period);
-  
-  // Set digital pin to LOW for half-period
-  digitalWrite(DIGITAL_PIN, LOW);
-  delayMicroseconds(half_period);
-  
-  // Repeat until length is reached
-  len -= period;
-  if (len > 0) {
-    // Call pulse function recursively
-    pulse(freq, len);
-  }
-}
-
-// Measure voltage across second capacitor using analog pin
-float measure() {
-  // Read analog value and convert to voltage
-  int analog = analogRead(ANALOG_PIN);
-  float voltage = analog * Vcc / 1024;
-  
-  // Return voltage
-  return voltage;
-}
-
-// Perform binary search to find resonant frequency
-float binary_search() {
-  // Calculate midpoint of frequency range
-  fmid = (fmin + fmax) / 2;
-  
-  // Generate a pulse with midpoint frequency and measure voltage
-  pulse(fmid, 0.1);
-  Vc2 = measure();
-  
-  // Generate a pulse with midpoint plus one frequency and measure voltage
-  pulse(fmid + 1, 0.1);
-  float Vc2_plus = measure();
-  
-  // Compare voltages and update frequency range
-  if (Vc2_plus > Vc2) {
-    // Maximum voltage is in upper half of range
-    fmin = fmid;
-  }
-  else {
-    // Maximum voltage is in lower half of range
-    fmax = fmid;
-  }
-  
-  // Check if accuracy threshold is reached
-  if (fmax - fmin < epsilon) {
-    // Return midpoint as resonant frequency
-    return fmid;
-  }
-  else {
-    // Repeat binary search recursively
-    return binary_search();
-  }
-}
-
-// Calculate impedance of second capacitor using frequency and capacitance
-float impedance(float freq, float cap) {
-  // Calculate angular frequency in radians per second
-  float w = 2 * PI * freq;
-  
-  // Calculate impedance in ohms using formula Zc = 1 / (j * w * C)
-  float Zc = 1 / (w * cap);
-  
-  // Return impedance
-  return Zc;
-}
-
-// Perform Kalman filter to estimate unknown resistance
-float kalman_filter() {
-  // Prediction step: use model x(k+1) = x(k) and add process noise Q
-  x = x; // No change in estimate
-  P = P + Q; // Increase error covariance
-  
-  // Update step: use measurement model Vc2 = Vcc * Zc2 / (R0 + x + Zc2)
-  
-  // Calculate residual y as difference between actual and predicted measurement
-  float y = Vc2 - (Vcc * impedance(fmid, C2) / (R0 + x + impedance(fmid, C2)));
-  
-  // Calculate residual covariance S as sum of predicted error covariance and measurement noise R
-  float S = P + R;
-  
-  // Calculate Kalman gain K as ratio of predicted error covariance and residual covariance
-  float K = P / S;
-  
-  // Update state estimate x by adding product of Kalman gain and residual
-  x = x + K * y;
-  
-  // Update state covariance P by subtracting product of Kalman gain and residual covariance
-  P = P - K * S;
-  
-  // Output step: return updated state estimate x as optimal estimate of unknown resistance
-  return x;
-}
-
-// Call all functions every 60 seconds to check if unknown resistance has changed
-void loop() {
-  // Check if 60 seconds have passed since last call
-  unsigned long current_time = millis();
-  if (current_time - timer >= 60000) {
-    // Reset timer
-    timer = current_time;
-    
-    // Perform binary search to find resonant frequency
-    float freq = binary_search();
-    
-    // Perform Kalman filter to estimate unknown resistance
-    float res = kalman_filter();
-    
-    // Print results to serial monitor
-    Serial.print("Resonant frequency: ");
-    Serial.print(freq);
-    Serial.println(" Hz");
-    Serial.print("Unknown resistance: ");
-    Serial.print(res);
-    Serial.println(" Ohms");
-  }
-}
-
-// Initialize serial communication and pin modes
 void setup() {
-  // Start serial communication at 9600 baud rate
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
-  
-  // Set digital pin as output
-  pinMode(DIGITAL_PIN, OUTPUT);
-  
-  // Set analog pin as input
-  pinMode(ANALOG_PIN, INPUT);
+}
+
+void safeDelayMicros(unsigned long us) {
+  if (us > 16000) { delay(us/1000); delayMicroseconds(us%1000); }
+  else delayMicroseconds(us);
+}
+
+float measureVpp(float freq) {
+  unsigned long half = 500000.0 / freq;
+  float vMax = 0, vMin = 5.0;
+  unsigned long s = millis();
+  while(millis() - s < 150) {
+    digitalWrite(PIN_OUT, HIGH); safeDelayMicros(half);
+    float v = analogRead(PIN_IN) * (VCC/1023.0);
+    if (v > vMax) vMax = v;
+    digitalWrite(PIN_OUT, LOW); safeDelayMicros(half);
+    v = analogRead(PIN_IN) * (VCC/1023.0);
+    if (v < vMin) vMin = v;
+  }
+  return vMax - vMin;
+}
+
+void updateKalman(float z) {
+  x_state[0] += x_state[1];
+  P_cov[0][0] += P_cov[1][1] + Q_proc[0][0];
+  P_cov[1][1] += Q_proc[1][1];
+  float S = P_cov[0][0] + R_meas;
+  float K0 = P_cov[0][0] / S;
+  float K1 = P_cov[1][0] / S;
+  float y = z - x_state[0];
+  x_state[0] += K0 * y;
+  x_state[1] += K1 * y;
+  float p01 = P_cov[0][1];
+  P_cov[0][0] *= (1.0 - K0);
+  P_cov[1][1] -= K1 * p01;
+  P_cov[0][1] *= (1.0 - K0);
+  P_cov[1][0] = P_cov[0][1];
+}
+
+void loop() {
+  static float lastF = 22.0;
+  float fLow = lastF * 0.5, fHigh = lastF * 2.0;
+  if (fLow < 0.1) fLow = 0.1; if (fHigh > 2000.0) fHigh = 2000.0;
+  if (measureVpp(fLow) < 3.6 || measureVpp(fHigh) > 3.6) { fLow = 0.05; fHigh = 2000.0; }
+  for(int i=0; i<10; i++) {
+    float fMid = (fLow + fHigh) / 2.0;
+    if (measureVpp(fMid) > 3.6) fLow = fMid; else fHigh = fMid;
+  }
+  lastF = (fLow + fHigh) / 2.0;
+  float vpp = measureVpp(lastF);
+  float ratio = vpp / VCC;
+  if (ratio < 0.99) {
+    float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
+    float tau = 1.0 / (4.0 * lastF * artanh_val);
+    float measR = (tau - (R0+R1)*(C1+C2)) / C2;
+    updateKalman(measR);
+    Serial.print("R_est: "); Serial.println(x_state[0]);
+  }
+  delay(60000);
 }
