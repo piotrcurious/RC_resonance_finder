@@ -29,7 +29,7 @@ float measureVpp(float freq) {
   unsigned long halfPeriod = period / 2;
   float vMax = 0, vMin = 5.0;
   unsigned long start = millis();
-  while(millis() - start < 100) {
+  unsigned long window = 200; if (halfPeriod > 133333) window = (halfPeriod * 1.5) / 1000; while(millis() - start < window) {
     digitalWrite(PIN_OUT, HIGH);
     if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
     float v = analogRead(PIN_IN) * (VCC / 1023.0);
