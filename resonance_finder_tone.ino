@@ -1,14 +1,14 @@
 /*
- * Frequency-Sweep measurement using 'tone()' for 2nd-order RC circuit.
- * Corrected to find the corner frequency where gain is 0.707.
+ * Sub-step precision measurement in resonance_finder_tone.ino.
+ * Uses a logarithmic sweep with parabolic interpolation to find the corner
+ * frequency (Gain ~ 0.707) with high precision.
  */
 
-#define PIN_OUT 9
-#define PIN_IN A0
-#define C1 0.5e-6
-#define C2 10e-6
-#define RA (250.0 + 1.0)
-#define V_REF 5.0
+#include <math.h>
+
+const int PIN_OUT = 9;
+const int PIN_IN = A0;
+const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
 
 void setup() {
   pinMode(PIN_OUT, OUTPUT);
@@ -16,45 +16,68 @@ void setup() {
   Serial.begin(9600);
 }
 
-void loop() {
-  float maxVpp = 0;
-  float cornerFreq = 1.0;
-  float targetVpp = 3.535; // 5.0 * 0.707
-
-  // Find corner frequency (Gain = 0.707)
-  float bestFreq = 1.0;
-  float minDiff = 5.0;
-
-  for (float f = 1.0; f < 1000.0; f *= 1.1) {
-    tone(PIN_OUT, (int)f);
-    delay(100);
-    float vpp = measureVpp(f);
-    float diff = abs(vpp - targetVpp);
-    if (diff < minDiff) {
-      minDiff = diff;
-      bestFreq = f;
-    }
+float measureVpp(float freq) {
+  unsigned long half = 500000.0 / freq;
+  float vSumMax = 0, vSumMin = 0;
+  int count = 0;
+  unsigned long start = millis();
+  unsigned long window = 200; if (half > 133333) window = (half * 1.5) / 1000;
+  while(millis() - start < window) {
+    digitalWrite(PIN_OUT, HIGH);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    vSumMax += (analogRead(PIN_IN) * VCC) / 1023.0;
+    digitalWrite(PIN_OUT, LOW);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    vSumMin += (analogRead(PIN_IN) * VCC) / 1023.0;
+    count++;
   }
-  noTone(PIN_OUT);
-
-  // w = 1 / tau_eff for corner freq
-  float w = 2.0 * PI * bestFreq;
-  float tau = 1.0 / w;
-  float r2 = (tau - RA*(C1+C2)) / C2;
-
-  Serial.print("Corner Freq: "); Serial.print(bestFreq);
-  Serial.print(" Hz, Calc R2: "); Serial.println(r2);
-  
-  delay(60000);
+  return (vSumMax - vSumMin) / (count + 1e-6);
 }
 
-float measureVpp(float f) {
-  float vMax = 0, vMin = 5.0;
-  unsigned long start = millis();
-  while(millis() - start < 50) {
-    float v = analogRead(PIN_IN) * (V_REF/1023.0);
-    if (v > vMax) vMax = v;
-    if (v < vMin) vMin = v;
+void loop() {
+  float targetVpp = 3.535; // 5.0 * 0.707
+  float bestF = 1.0;
+  float minErr = 5.0;
+
+  // 1. Logarithmic Sweep to find coarse best
+  float f_list[10];
+  float err_list[10];
+  int idx = 0;
+  for (float f = 1.0; f < 500.0; f *= 1.8) {
+    float vpp = measureVpp(f);
+    float err = abs(vpp - targetVpp);
+    f_list[idx] = f;
+    err_list[idx] = err;
+    if (err < minErr) {
+      minErr = err;
+      bestF = f;
+    }
+    idx++;
+    if (idx >= 10) break;
   }
-  return vMax - vMin;
+  
+  // 2. Parabolic Interpolation for sub-step precision
+  // Find index of bestF
+  int b_idx = 0;
+  for(int i=0; i<idx; i++) if(f_list[i] == bestF) b_idx = i;
+
+  float preciseF = bestF;
+  if (b_idx > 0 && b_idx < idx - 1) {
+    float x1 = f_list[b_idx-1], x2 = f_list[b_idx], x3 = f_list[b_idx+1];
+    float y1 = err_list[b_idx-1], y2 = err_list[b_idx], y3 = err_list[b_idx+1];
+    // Vertex of parabola through (x1,y1), (x2,y2), (x3,y3)
+    float denom = (x1-x2)*(x1-x3)*(x2-x3);
+    float A = (x3*(y2-y1) + x2*(y1-y3) + x1*(y3-y2)) / denom;
+    float B = (x3*x3*(y1-y2) + x2*x2*(y3-y1) + x1*x1*(y2-y3)) / denom;
+    if (abs(A) > 1e-9) preciseF = -B / (2.0 * A);
+  }
+
+  // Solve for R2 using OCTC at corner frequency
+  float w = 2.0 * PI * preciseF;
+  float r2 = (1.0/w - (R0+R1)*(C1+C2)) / C2;
+
+  Serial.print("CornerFreq:"); Serial.print(preciseF);
+  Serial.print(" R2_Ohm:"); Serial.println(r2);
+
+  delay(60000);
 }

@@ -1,7 +1,7 @@
 /*
- * Specialized transient analysis in short_pulse_resistance.ino.
- * Sends a single charging pulse and analyzes the discharge curve.
- * Uses the log-ratio of two points to determine the time constant tau.
+ * Advanced Transient Analysis in short_pulse_resistance.ino.
+ * Samples multiple points during exponential discharge and uses
+ * linear regression on log-transformed data to extract tau.
  */
 
 #include <math.h>
@@ -17,38 +17,49 @@ void setup() {
 }
 
 void loop() {
-  // Discharge capacitors
+  // Discharge
   digitalWrite(PIN_OUT, LOW);
   delay(1000);
 
-  // Charge briefly
+  // Charge
   digitalWrite(PIN_OUT, HIGH);
-  delay(200);
+  delay(500);
 
-  // Start discharge and measure
+  // Measure decay
   digitalWrite(PIN_OUT, LOW);
-  unsigned long t0 = micros();
-  float v0 = (analogRead(PIN_IN) * VCC) / 1023.0;
+  unsigned long startT = micros();
 
-  delay(50); // Wait for some decay
+  float y_sum = 0, x_sum = 0, xy_sum = 0, x2_sum = 0;
+  int n = 0;
 
-  unsigned long t1 = micros();
-  float v1 = (analogRead(PIN_IN) * VCC) / 1023.0;
+  for (int i = 0; i < 20; i++) {
+    unsigned long t = micros() - startT;
+    float v = (analogRead(PIN_IN) * VCC) / 1023.0;
 
-  if (v0 > v1 && v1 > 0.1) {
-    // V(t) = V0 * exp(-t/tau) -> ln(V0/V1) = (t1-t0)/tau
-    float dt = (t1 - t0) / 1e6;
-    float tau = dt / log(v0 / v1);
+    if (v > 0.2) { // Log valid range
+      float lnV = log(v);
+      float timeS = t / 1e6;
 
-    // tau_eff = (R0+R1)(C1+C2) + R2*C2
+      y_sum += lnV;
+      x_sum += timeS;
+      xy_sum += lnV * timeS;
+      x2_sum += timeS * timeS;
+      n++;
+    }
+    delay(10); // Sample every 10ms
+  }
+
+  if (n > 5) {
+    // Linear regression: ln(V) = ln(V0) - (1/tau) * t
+    // Slope m = (n*xy - x*y) / (n*x2 - x^2)
+    float slope = (n * xy_sum - x_sum * y_sum) / (n * x2_sum - x_sum * x_sum);
+    float tau = -1.0 / slope;
+
     float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
-
-    Serial.print("V0:"); Serial.print(v0);
-    Serial.print(" V1:"); Serial.print(v1);
-    Serial.print(" Tau_s:"); Serial.print(tau);
+    Serial.print("Tau_s:"); Serial.print(tau);
     Serial.print(" R2_Ohm:"); Serial.println(r2);
   } else {
-    Serial.println("Measurement Failed: Insufficient Decay");
+    Serial.println("Error: Insufficient Data");
   }
 
   delay(60000);
