@@ -45,7 +45,7 @@ float measureVpp(float freq) {
   uint32_t half = 500000.0 / freq;
   float vMax = 0, vMin = 5.0;
   uint32_t start = millis();
-  while(millis() - start < 150) {
+  unsigned long window = 200; if (half > 133333) window = (half * 1.5) / 1000; while(millis() - start < window) {
     digitalWrite(PIN_OUT, HIGH);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
     float v = analogRead(PIN_IN) * (VCC/1023.0);

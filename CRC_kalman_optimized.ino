@@ -58,16 +58,21 @@ void safeDelayMicros(unsigned long us) {
 }
 
 // Measure Vpp with square wave
+// Adaptive measurement window ensures at least one full cycle is captured.
 float measureVpp(float freq) {
-  if (freq < 0.05) freq = 0.05;
+  if (freq < 0.01) freq = 0.01;
   unsigned long period = 1000000.0 / freq;
   unsigned long halfPeriod = period / 2;
 
   float vMax = 0;
   float vMin = 5.0;
 
+  // Measurement window: max(200ms, 1.5 * period)
+  unsigned long window = 200;
+  if (period > 133333) window = (period * 1.5) / 1000;
+
   unsigned long startTime = millis();
-  while (millis() - startTime < 200) {
+  while (millis() - startTime < window) {
     digitalWrite(PIN_OUT, HIGH);
     safeDelayMicros(halfPeriod);
     float v = analogRead(PIN_IN) * (VCC / 1023.0);
@@ -78,7 +83,7 @@ float measureVpp(float freq) {
     v = analogRead(PIN_IN) * (VCC / 1023.0);
     if (v < vMin) vMin = v;
 
-    if (period > 400000) break;
+    if (millis() - startTime > 5000) break; // Absolute timeout (5s)
   }
   return vMax - vMin;
 }
@@ -140,10 +145,9 @@ void loop() {
 
     float targetVpp = 3.6;
 
-    if (measureVpp(fLow) < targetVpp || measureVpp(fHigh) > targetVpp) {
-      fLow = 0.05;
-      fHigh = 2000.0;
-    }
+    // Autorange: if target is outside [fLow, fHigh], expand range until captured
+    while (measureVpp(fLow) < targetVpp && fLow > 0.01) fLow *= 0.5;
+    while (measureVpp(fHigh) > targetVpp && fHigh < 5000.0) fHigh *= 2.0;
 
     for (int i = 0; i < 10; i++) {
       float fMid = (fLow + fHigh) / 2.0;

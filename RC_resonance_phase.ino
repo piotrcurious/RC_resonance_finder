@@ -42,17 +42,28 @@ void loop() {
 float measurePhase(float f) {
   unsigned long period = 1000000.0 / f;
   unsigned long halfPeriod = period / 2;
+
+  // Stabilize for a few cycles
+  for (int i=0; i<3; i++) {
+    digitalWrite(PIN_OUT, HIGH);
+    if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
+    digitalWrite(PIN_OUT, LOW);
+    if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
+  }
+
   unsigned long start = micros();
   digitalWrite(PIN_OUT, HIGH);
-  
-  // Wait for rising edge crossing Vcc/2
-  while(analogRead(PIN_IN) < 512) {
+
+  // Use a small moving average to detect crossing (noise immunity)
+  int avg = 0;
+  while(true) {
+    avg = (avg * 3 + analogRead(PIN_IN)) >> 2;
+    if (avg >= 512) break;
     if (micros() - start > period) return 0;
   }
   unsigned long crossing = micros() - start;
 
-  // Reset pin
-  delayMicroseconds(halfPeriod);
+  if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
   digitalWrite(PIN_OUT, LOW);
 
   return (crossing * 360.0) / period;

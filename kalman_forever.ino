@@ -36,7 +36,7 @@ float measureVpp(float freq) {
   unsigned long halfPeriod = 500000.0 / freq;
   float vMax = 0, vMin = 5.0;
   unsigned long start = millis();
-  while(millis() - start < 150) {
+  unsigned long window = 200; if (halfPeriod > 133333) window = (halfPeriod * 1.5) / 1000; while(millis() - start < window) {
     digitalWrite(PIN_OUT, HIGH); safeDelayMicros(halfPeriod);
     float v = analogRead(PIN_IN) * (V_MAX / 1023.0);
     if (v > vMax) vMax = v;
