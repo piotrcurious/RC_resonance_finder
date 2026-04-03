@@ -1,3 +1,5 @@
+float measureVpp(float freq);
+#include "RCConfig.h"
 /*
  * Resistance measurement using 2nd-order RC ladder theory (Kirchhoff approach).
  * Pin (R0=250) -- R1(1) --+-- R2(Unknown) --+-- A0
@@ -7,19 +9,15 @@
  *                        GND               GND
  */
 
-const int PIN_OUT = 9;
-const int PIN_IN = A0;
+const int PIN_OUT_VAL = 3;
+const int PIN_IN_VAL = A0;
 
 // Known Constants
-const float R0 = 250.0;
-const float R1 = 1.0;
-const float C1 = 0.5e-6;
-const float C2 = 10.0e-6;
-const float VCC = 5.0;
+//;
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
+  pinMode(PIN_OUT_VAL, OUTPUT);
+  pinMode(PIN_IN_VAL, INPUT);
   Serial.begin(9600);
 }
 
@@ -30,13 +28,13 @@ float measureVpp(float freq) {
   float vMax = 0, vMin = 5.0;
   unsigned long start = millis();
   unsigned long window = 200; if (halfPeriod > 133333) window = (halfPeriod * 1.5) / 1000; while(millis() - start < window) {
-    digitalWrite(PIN_OUT, HIGH);
+    digitalWrite(PIN_OUT_VAL, HIGH);
     if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
-    float v = analogRead(PIN_IN) * (VCC / 1023.0);
+    float v = analogRead(PIN_IN_VAL) * (VCC / 1023.0);
     if (v > vMax) vMax = v;
-    digitalWrite(PIN_OUT, LOW);
+    digitalWrite(PIN_OUT_VAL, LOW);
     if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
-    v = analogRead(PIN_IN) * (VCC / 1023.0);
+    v = analogRead(PIN_IN_VAL) * (VCC / 1023.0);
     if (v < vMin) vMin = v;
   }
   return vMax - vMin;
@@ -61,7 +59,7 @@ void loop() {
   // |H(jw)| = 1 / sqrt((1 - w^2 Ra R2 C1 C2)^2 + (w (R2 C2 + Ra C1 + Ra C2))^2)
   float vppFinal = measureVpp(bestFreq);
   float g = vppFinal / VCC;
-  float w = 2.0 * PI * bestFreq;
+  float w = 2.0 * 3.1415926535 * bestFreq;
   float Ra = R0 + R1;
   
   // R2 = (tau - Ra(C1+C2))/C2 where tau approx 1/(w*sqrt(1/g^2 - 1))

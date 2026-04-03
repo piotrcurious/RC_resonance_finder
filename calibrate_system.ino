@@ -1,3 +1,5 @@
+float measureVpp(float freq);
+#include "RCConfig.h"
 /*
  * calibrate_system.ino - Helps calibrate Arduino pin resistance R0.
  * Instructions: Connect a known reference resistor (e.g., 1k) as R2.

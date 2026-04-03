@@ -1,3 +1,5 @@
+float measureVpp(float freq);
+#include "RCConfig.h"
 /*
  * Specialized Two-Frequency Measurement in dual_RC_convergent.ino.
  * Uses a high frequency to characterize the first stage (R0, R1, C1)
@@ -7,13 +9,12 @@
 
 #include <math.h>
 
-const int PIN_OUT = 9;
-const int PIN_IN = A0;
-const float R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
+const int PIN_OUT_VAL = 3;
+const int PIN_IN_VAL = A0;
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
+  pinMode(PIN_OUT_VAL, OUTPUT);
+  pinMode(PIN_IN_VAL, INPUT);
   Serial.begin(9600);
 }
 
@@ -23,12 +24,12 @@ float measureVpp(float freq) {
   int count = 0;
   unsigned long start = millis();
   while(millis() - start < 300) {
-    digitalWrite(PIN_OUT, HIGH);
+    digitalWrite(PIN_OUT_VAL, HIGH);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    vSumMax += (analogRead(PIN_IN) * VCC) / 1023.0;
-    digitalWrite(PIN_OUT, LOW);
+    vSumMax += (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
+    digitalWrite(PIN_OUT_VAL, LOW);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    vSumMin += (analogRead(PIN_IN) * VCC) / 1023.0;
+    vSumMin += (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
     count++;
   }
   return (vSumMax - vSumMin) / count;
@@ -40,7 +41,7 @@ void loop() {
   float fHigh = 2000.0;
   float vpp_high = measureVpp(fHigh);
   float gHigh = vpp_high / VCC;
-  float wHigh = 2.0 * PI * fHigh;
+  float wHigh = 2.0 * 3.1415926535 * fHigh;
   // Estimation of Ra: Ra = sqrt((1/gHigh)^2 - 1) / (wHigh * C1)
   float Ra_est = sqrt(1.0/(gHigh*gHigh + 1e-6) - 1.0) / (wHigh * C1);
   if (Ra_est < 100.0) Ra_est = 251.0; // Fallback

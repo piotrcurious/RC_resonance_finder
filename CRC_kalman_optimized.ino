@@ -1,3 +1,5 @@
+float measureVpp(float freq);
+#include "RCConfig.h"
 /*
  * Refactored Optimized RC Measurement using RCLadder library.
  */

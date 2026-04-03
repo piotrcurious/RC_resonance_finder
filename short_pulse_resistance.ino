@@ -1,3 +1,4 @@
+#include "RCConfig.h"
 /*
  * Advanced Transient Analysis in short_pulse_resistance.ino.
  * Samples multiple points during exponential discharge and uses
@@ -6,27 +7,26 @@
 
 #include <math.h>
 
-const int PIN_OUT = 9;
-const int PIN_IN = A0;
-const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
+const int PIN_OUT_VAL = 3;
+const int PIN_IN_VAL = A0;
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
+  pinMode(PIN_OUT_VAL, OUTPUT);
+  pinMode(PIN_IN_VAL, INPUT);
   Serial.begin(9600);
 }
 
 void loop() {
   // Discharge
-  digitalWrite(PIN_OUT, LOW);
+  digitalWrite(PIN_OUT_VAL, LOW);
   delay(1000);
 
   // Charge
-  digitalWrite(PIN_OUT, HIGH);
+  digitalWrite(PIN_OUT_VAL, HIGH);
   delay(500);
 
   // Measure decay
-  digitalWrite(PIN_OUT, LOW);
+  digitalWrite(PIN_OUT_VAL, LOW);
   unsigned long startT = micros();
 
   float y_sum = 0, x_sum = 0, xy_sum = 0, x2_sum = 0;
@@ -34,7 +34,7 @@ void loop() {
 
   for (int i = 0; i < 20; i++) {
     unsigned long t = micros() - startT;
-    float v = (analogRead(PIN_IN) * VCC) / 1023.0;
+    float v = (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
 
     if (v > 0.2) { // Log valid range
       float lnV = log(v);

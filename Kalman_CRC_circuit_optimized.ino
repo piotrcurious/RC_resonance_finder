@@ -1,15 +1,17 @@
+const int PIN_OUT_VAL = 3;
+const int PIN_IN_VAL = A0;
+float measureVpp(float freq);
+#include "RCConfig.h"
 /*
  * Kalman Filter for 2nd-order RC circuit.
  * Tracks R and frequency using measurements of Vpp and Period.
  */
 
-#define PIN_OUT 13
-#define PIN_IN A0
-#define C1 0.5e-6
-#define C2 10e-6
-#define R0 250.0
-#define R1 1.0
-#define V_MAX 5.0
+const float C1_val = 0.5e-6;
+const float C2_val = 10.0e-6;
+const float R0_val = 250.0;
+const float R1_val = 1.0;
+// Removed
 #define T_INTERVAL 60000
 
 float estimatedR = 1000.0;
@@ -21,8 +23,8 @@ float Q = 10.0;
 float R_noise = 500.0;
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
+  pinMode(PIN_OUT_VAL, OUTPUT);
+  pinMode(PIN_IN_VAL, INPUT);
   Serial.begin(9600);
 }
 
@@ -31,20 +33,20 @@ float measureVpp(float freq) {
   float vMax = 0, vMin = 5.0;
   unsigned long start = millis();
   unsigned long window = 200; if (halfPeriod > 133333) window = (halfPeriod * 1.5) / 1000; while(millis() - start < window) {
-    digitalWrite(PIN_OUT, HIGH);
+    digitalWrite(PIN_OUT_VAL, HIGH);
     if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
-    float v = analogRead(PIN_IN) * (V_MAX / 1023.0);
+    float v = analogRead(PIN_IN_VAL) * (VCC / 1023.0);
     if (v > vMax) vMax = v;
-    digitalWrite(PIN_OUT, LOW);
+    digitalWrite(PIN_OUT_VAL, LOW);
     if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
-    v = analogRead(PIN_IN) * (V_MAX / 1023.0);
+    v = analogRead(PIN_IN_VAL) * (VCC / 1023.0);
     if (v < vMin) vMin = v;
   }
   return vMax - vMin;
 }
 
 float solveR(float f, float vpp) {
-  float ratio = vpp / V_MAX;
+  float ratio = vpp / VCC;
   if (ratio >= 0.99) return estimatedR;
   float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
   float tau = 1.0 / (4.0 * f * artanh_val);
