@@ -1,3 +1,5 @@
+float measureVpp(float freq);
+#include "RCConfig.h"
 /*
  * Improved search in kirhoff_binary.ino.
  * Uses a Golden Section Search to find the target frequency for R2 estimation.
@@ -5,13 +7,12 @@
 
 #include <math.h>
 
-const int PIN_OUT = 9;
-const int PIN_IN = A0;
-const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
+const int PIN_OUT_VAL = 3;
+const int PIN_IN_VAL = A0;
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
+  pinMode(PIN_OUT_VAL, OUTPUT);
+  pinMode(PIN_IN_VAL, INPUT);
   Serial.begin(9600);
 }
 
@@ -22,12 +23,12 @@ float measureVpp(float freq) {
   unsigned long start = millis();
   unsigned long window = 200; if (half > 133333) window = (half * 1.5) / 1000;
   while(millis() - start < window) {
-    digitalWrite(PIN_OUT, HIGH);
+    digitalWrite(PIN_OUT_VAL, HIGH);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    vSumMax += (analogRead(PIN_IN) * VCC) / 1023.0;
-    digitalWrite(PIN_OUT, LOW);
+    vSumMax += (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
+    digitalWrite(PIN_OUT_VAL, LOW);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    vSumMin += (analogRead(PIN_IN) * VCC) / 1023.0;
+    vSumMin += (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
     count++;
   }
   return (vSumMax - vSumMin) / (count + 1e-6);

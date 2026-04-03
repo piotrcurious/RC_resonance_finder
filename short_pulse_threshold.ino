@@ -1,34 +1,35 @@
+const int PIN_OUT_VAL = 3;
+const int PIN_IN_VAL = A0;
+#include "RCConfig.h"
 /*
  * Simple resistance measurement using charging time.
  * V(t) = Vcc * (1 - exp(-t/tau))
  * Measures time to reach a threshold and solves for R2.
  */
 
-#define PIN_OUT 9
-#define PIN_IN A0
-#define C1 0.5e-6
-#define C2 10e-6
-#define R0 250.0
-#define R1 1.0
+const float C1_val = 0.5e-6;
+const float C2_val = 10.0e-6;
+const float R0_val = 250.0;
+const float R1_val = 1.0;
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
+  pinMode(PIN_OUT_VAL, OUTPUT);
+  pinMode(PIN_IN_VAL, INPUT);
   Serial.begin(9600);
 }
 
 void loop() {
   // Discharge capacitors first
-  pinMode(PIN_OUT, OUTPUT);
-  digitalWrite(PIN_OUT, LOW);
+  pinMode(PIN_OUT_VAL, OUTPUT);
+  digitalWrite(PIN_OUT_VAL, LOW);
   delay(1000);
 
   // Start charging
   unsigned long start = micros();
-  digitalWrite(PIN_OUT, HIGH);
+  digitalWrite(PIN_OUT_VAL, HIGH);
 
   float threshold = 3.16; // 5.0 * (1 - 1/e) approx
-  while(analogRead(PIN_IN) * (5.0/1023.0) < threshold) {
+  while(analogRead(PIN_IN_VAL) * (5.0/1023.0) < threshold) {
     if (micros() - start > 5000000) break; // Timeout
   }
   unsigned long duration = micros() - start;
