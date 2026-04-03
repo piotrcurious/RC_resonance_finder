@@ -19,16 +19,61 @@ float RCLadder::measureVpp(float freq) {
   float vSumMax = 0, vSumMin = 0;
   int count = 0;
   unsigned long window = 300; if (period > 150000) window = (period * 2.0) / 1000;
+
   unsigned long start = millis();
+  unsigned long lastSwitch = micros();
+  int state = LOW;
+
   while(millis() - start < window) {
-    digitalWrite(_pinOut, HIGH); safeDelayMicros(half);
-    vSumMax += (analogRead(_pinIn) * 5.0) / 1023.0;
-    digitalWrite(_pinOut, LOW); safeDelayMicros(half);
-    vSumMin += (analogRead(_pinIn) * 5.0) / 1023.0;
-    count++;
+    unsigned long now = micros();
+    if (now - lastSwitch >= half) {
+      state = (state == LOW) ? HIGH : LOW;
+      digitalWrite(_pinOut, state);
+      lastSwitch = now;
+
+      // Sample once after state has stabilized (wait 10% of half-period)
+      safeDelayMicros(half / 10);
+      float v = (analogRead(_pinIn) * 5.0) / 1023.0;
+      if (state == HIGH) vSumMax += v;
+      else { vSumMin += v; count++; }
+    }
     if (millis() - start > 5000) break;
   }
   return (count > 0) ? (vSumMax - vSumMin) / count : 0;
+}
+
+float RCLadder::findCrossingMicros(float freq, int threshold) {
+  unsigned long period = 1000000.0 / freq;
+  unsigned long half = period / 2;
+
+  // 1. Stabilize
+  for(int i=0; i<3; i++) {
+    digitalWrite(_pinOut, HIGH); safeDelayMicros(half);
+    digitalWrite(_pinOut, LOW); safeDelayMicros(half);
+  }
+
+  // 2. Measure with timestamping
+  unsigned long start = micros();
+  digitalWrite(_pinOut, HIGH);
+
+  int v_prev = analogRead(_pinIn);
+  unsigned long t_prev = micros();
+
+  while(micros() - start < period) {
+    int v_curr = analogRead(_pinIn);
+    unsigned long t_curr = micros();
+
+    if (v_prev < threshold && v_curr >= threshold) {
+      // Linear interpolation for sub-microsecond precision
+      float fraction = (float)(threshold - v_prev) / (v_curr - v_prev);
+      digitalWrite(_pinOut, LOW);
+      return (t_prev - start) + fraction * (t_curr - t_prev);
+    }
+    v_prev = v_curr;
+    t_prev = t_curr;
+  }
+  digitalWrite(_pinOut, LOW);
+  return 0;
 }
 float RCLadder::solveR2(float freq, float vpp) {
   float ratio = vpp / 5.0;

@@ -33,12 +33,13 @@ void loop() {
   int n = 0;
 
   for (int i = 0; i < 20; i++) {
-    unsigned long t = micros() - startT;
-    float v = (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
+    int raw = analogRead(PIN_IN);
+    unsigned long t = micros() - startT; // High-precision timestamp
+    float v = (raw * VCC) / 1023.0;
 
     if (v > 0.2) { // Log valid range
       float lnV = log(v);
-      float timeS = t / 1e6;
+      float timeS = (float)t / 1e6;
 
       y_sum += lnV;
       x_sum += timeS;

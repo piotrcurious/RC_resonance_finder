@@ -11,13 +11,18 @@ int analogRead(int pin) { return (int)((_mock_v2 / 5.0) * 1023.0); }
 unsigned long millis() { return (unsigned long)(_mock_micros / 1000); }
 unsigned long micros() { return (unsigned long)_mock_micros; }
 static void _tickPhysics(unsigned long dt_us) {
-    float dt = dt_us / 1e6;
+    // 0.1us steps for sub-microsecond precision
+    int sub_steps = 10;
+    float dt = (dt_us / 1e6) / sub_steps;
     float vin = (_mock_vin == HIGH) ? 5.0 : 0.0;
     float Ra = MOCK_R0 + MOCK_R1;
-    float ir1 = (vin - _mock_v1) / Ra;
-    float ir2 = (_mock_v1 - _mock_v2) / _mock_r2_true;
-    _mock_v1 += ((ir1 - ir2) / MOCK_C1) * dt;
-    _mock_v2 += (ir2 / MOCK_C2) * dt;
+
+    for(int s=0; s<sub_steps; s++) {
+        float ir1 = (vin - _mock_v1) / Ra;
+        float ir2 = (_mock_v1 - _mock_v2) / _mock_r2_true;
+        _mock_v1 += ((ir1 - ir2) / MOCK_C1) * dt;
+        _mock_v2 += (ir2 / MOCK_C2) * dt;
+    }
     _mock_micros += dt_us;
 }
 void delay(unsigned long ms) {
