@@ -58,34 +58,38 @@ void safeDelayMicros(unsigned long us) {
 }
 
 // Measure Vpp with square wave
-// Adaptive measurement window ensures at least one full cycle is captured.
+// Averages multiple peak/trough readings for outlier rejection and noise immunity.
 float measureVpp(float freq) {
   if (freq < 0.01) freq = 0.01;
   unsigned long period = 1000000.0 / freq;
   unsigned long halfPeriod = period / 2;
 
-  float vMax = 0;
-  float vMin = 5.0;
+  float vSumMax = 0, vSumMin = 0;
+  int count = 0;
 
-  // Measurement window: max(200ms, 1.5 * period)
-  unsigned long window = 200;
-  if (period > 133333) window = (period * 1.5) / 1000;
+  // Measurement window: max(300ms, 2.0 * period)
+  unsigned long window = 300;
+  if (period > 150000) window = (period * 2.0) / 1000;
 
   unsigned long startTime = millis();
   while (millis() - startTime < window) {
     digitalWrite(PIN_OUT, HIGH);
     safeDelayMicros(halfPeriod);
-    float v = analogRead(PIN_IN) * (VCC / 1023.0);
-    if (v > vMax) vMax = v;
+    float vHigh = analogRead(PIN_IN) * (VCC / 1023.0);
 
     digitalWrite(PIN_OUT, LOW);
     safeDelayMicros(halfPeriod);
-    v = analogRead(PIN_IN) * (VCC / 1023.0);
-    if (v < vMin) vMin = v;
+    float vLow = analogRead(PIN_IN) * (VCC / 1023.0);
 
-    if (millis() - startTime > 5000) break; // Absolute timeout (5s)
+    vSumMax += vHigh;
+    vSumMin += vLow;
+    count++;
+
+    if (millis() - startTime > 6000) break; // Absolute timeout (6s)
   }
-  return vMax - vMin;
+
+  if (count == 0) return 0;
+  return (vSumMax - vSumMin) / count;
 }
 
 // Solve for R2 using Square Wave model: Vpp = Vcc * tanh(1 / (4*f*RC))
@@ -138,16 +142,24 @@ void loop() {
     lastMeasureTime = now;
 
     // Binary search for frequency that gives Gain ~ 0.72 (Vpp ~ 3.6V)
-    float fLow = lastResonantFreq * 0.5;
-    float fHigh = lastResonantFreq * 2.0;
-    if (fLow < 0.1) fLow = 0.1;
+    // Re-seed from Kalman estimate for even faster convergence
+    float Ra = R0 + R1;
+    float targetTau = 1.0 / (4.0 * 22.0 * 0.895); // default guess tau
+    if (estimatedR2 > 0) {
+      targetTau = Ra * (C1 + C2) + estimatedR2 * C2;
+    }
+    float fGuess = 1.0 / (4.0 * targetTau * 0.895); // artanh(0.72) ~ 0.895
+
+    float fLow = fGuess * 0.7;
+    float fHigh = fGuess * 1.4;
+    if (fLow < 0.01) fLow = 0.01;
     if (fHigh > 5000.0) fHigh = 5000.0;
 
     float targetVpp = 3.6;
 
     // Autorange: if target is outside [fLow, fHigh], expand range until captured
-    while (measureVpp(fLow) < targetVpp && fLow > 0.01) fLow *= 0.5;
-    while (measureVpp(fHigh) > targetVpp && fHigh < 5000.0) fHigh *= 2.0;
+    while (measureVpp(fLow) < targetVpp && fLow > 0.005) fLow *= 0.5;
+    while (measureVpp(fHigh) > targetVpp && fHigh < 10000.0) fHigh *= 2.0;
 
     for (int i = 0; i < 10; i++) {
       float fMid = (fLow + fHigh) / 2.0;
@@ -161,11 +173,19 @@ void loop() {
     float measuredVpp = measureVpp(bestFreq);
 
     float currentR2 = solveForR2(bestFreq, measuredVpp);
+
+    // Circuit Integrity Checks
+    if (measuredVpp < 0.1) {
+      Serial.println("ALERT: Possible Short Circuit or No Power");
+    } else if (bestFreq < 0.02 && measuredVpp > 4.8) {
+      Serial.println("ALERT: Possible Open Circuit (R2 too high)");
+    }
+
     updateKalman(currentR2);
 
-    Serial.print("Freq: "); Serial.print(bestFreq);
-    Serial.print(" Hz, Vpp: "); Serial.print(measuredVpp);
-    Serial.print(" V, Measured R2: "); Serial.print(currentR2);
-    Serial.print(" Ohms, Filtered R2: "); Serial.println(estimatedR2);
+    Serial.print("Freq_Hz:"); Serial.print(bestFreq);
+    Serial.print(" Vpp_V:"); Serial.print(measuredVpp);
+    Serial.print(" R2_Raw_Ohm:"); Serial.print(currentR2);
+    Serial.print(" R2_Est_Ohm:"); Serial.println(estimatedR2);
   }
 }
