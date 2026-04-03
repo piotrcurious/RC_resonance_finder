@@ -1,7 +1,7 @@
 /*
- * Corrected specialized measurement in resonance_real_imaginary.ino.
- * Uses 2nd-order RC ladder theory and 2nd-order Kalman filter for R2 tracking.
- * Analyzes the complex impedance magnitude for R2 extraction.
+ * Advanced Measurement in resonance_real_imaginary.ino.
+ * Uses a correlation-based approach to extract magnitude and phase,
+ * providing the complex impedance response of the 2nd-order RC ladder.
  */
 
 #include <math.h>
@@ -10,73 +10,48 @@ const int PIN_OUT = 10;
 const int PIN_IN = A0;
 const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
 
-// Kalman Filter variables (R2 and dR2)
-float x_state[2] = {1000.0, 0.0};
-float P_cov[2][2] = {{1e6, 0}, {0, 1e3}};
-float Q_proc[2][2] = {{10.0, 0}, {0, 1.0}};
-float R_meas = 500.0;
-
 void setup() {
   pinMode(PIN_OUT, OUTPUT);
   pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
 }
 
-void safeDelayMicros(unsigned long us) {
-  if (us > 16000) { delay(us/1000); delayMicroseconds(us%1000); }
-  else delayMicroseconds(us);
-}
-
-float measureVpp(float freq) {
-  unsigned long half = 500000.0 / freq;
-  float vMax = 0, vMin = 5.0;
-  unsigned long s = millis();
-  while(millis() - s < 150) {
-    digitalWrite(PIN_OUT, HIGH); safeDelayMicros(half);
-    float v = analogRead(PIN_IN) * (VCC/1023.0);
-    if (v > vMax) vMax = v;
-    digitalWrite(PIN_OUT, LOW); safeDelayMicros(half);
-    v = analogRead(PIN_IN) * (VCC/1023.0);
-    if (v < vMin) vMin = v;
-  }
-  return vMax - vMin;
-}
-
-void updateKalman(float z) {
-  x_state[0] += x_state[1];
-  P_cov[0][0] += P_cov[1][1] + Q_proc[0][0];
-  P_cov[1][1] += Q_proc[1][1];
-  float S = P_cov[0][0] + R_meas;
-  float K0 = P_cov[0][0] / S;
-  float K1 = P_cov[1][0] / S;
-  float y = z - x_state[0];
-  x_state[0] += K0 * y;
-  x_state[1] += K1 * y;
-  float p01 = P_cov[0][1];
-  P_cov[0][0] *= (1.0 - K0);
-  P_cov[1][1] -= K1 * p01;
-  P_cov[0][1] *= (1.0 - K0);
-  P_cov[1][0] = P_cov[0][1];
-}
-
 void loop() {
-  static float lastF = 22.0;
-  float fLow = lastF * 0.5, fHigh = lastF * 2.0;
-  if (fLow < 0.1) fLow = 0.1; if (fHigh > 2000.0) fHigh = 2000.0;
-  if (measureVpp(fLow) < 3.6 || measureVpp(fHigh) > 3.6) { fLow = 0.05; fHigh = 2000.0; }
-  for(int i=0; i<10; i++) {
-    float fMid = (fLow + fHigh) / 2.0;
-    if (measureVpp(fMid) > 3.6) fLow = fMid; else fHigh = fMid;
+  float freq = 20.0; // Test frequency
+
+  float real_corr = 0, imag_corr = 0;
+  int samples = 200;
+  unsigned long period = 1000000.0 / freq;
+  unsigned long dt = period / 20; // 20 samples per period
+
+  for (int i = 0; i < samples; i++) {
+    unsigned long start = micros();
+    // Square wave oscillation
+    if ((i % 20) < 10) digitalWrite(PIN_OUT, HIGH);
+    else digitalWrite(PIN_OUT, LOW);
+
+    float v = (analogRead(PIN_IN) * VCC) / 1023.0;
+    float phase = (2.0 * PI * (i % 20)) / 20.0;
+
+    real_corr += v * cos(phase);
+    imag_corr += v * sin(phase);
+
+    while(micros() - start < dt);
   }
-  lastF = (fLow + fHigh) / 2.0;
-  float vpp = measureVpp(lastF);
-  float ratio = vpp / VCC;
-  if (ratio < 0.99) {
-    float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
-    float tau = 1.0 / (4.0 * lastF * artanh_val);
-    float measR = (tau - (R0+R1)*(C1+C2)) / C2;
-    updateKalman(measR);
-    Serial.print("R_est: "); Serial.println(x_state[0]);
-  }
+
+  float mag = sqrt(real_corr*real_corr + imag_corr*imag_corr) * (2.0 / samples);
+  float phase_deg = atan2(imag_corr, real_corr) * 180.0 / PI;
+
+  // Solve for R2 from magnitude
+  float gain = mag / (VCC * 0.5); // 0.5 factor for fundamental of square wave approx
+  if (gain > 0.99) gain = 0.99;
+  float w = 2.0 * PI * freq;
+  float tau = sqrt(1.0/(gain*gain) - 1.0) / w;
+  float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
+
+  Serial.print("Mag_V:"); Serial.print(mag);
+  Serial.print(" Phase_Deg:"); Serial.print(phase_deg);
+  Serial.print(" R2_Ohm:"); Serial.println(r2);
+
   delay(60000);
 }
