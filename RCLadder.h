@@ -6,6 +6,7 @@ class RCLadder {
     RCLadder(int pinOut, int pinIn, float r1, float c1, float c2, float r0 = 250.0);
     float measureVpp(float freq);
     float solveR2(float freq, float vpp);
+    float findCrossingMicros(float freq, int threshold);
     void updateKalman(float measurement);
     float getEstimate();
     float getConfidence();
