@@ -1,70 +1,49 @@
+/*
+ * Simplified R2 measurement in very_simple.ino.
+ * Corrected to account for the 2nd-order RC ladder and the digital pin's internal resistance R0.
+ * Uses a single frequency measurement and square-wave solver.
+ */
 
-// Define constants and variables
-const int outputPin = 9; // digital output pin for RC circuit
-const int inputPin = A0; // analog input pin for reading voltage across capacitor
-const float capacitance = 10e-6; // capacitance of capacitor in farads
-const float pi = 3.14159; // pi constant
-float resistance; // resistance of resistor in ohms
-float frequency; // frequency of RC circuit in hertz
-float voltage; // voltage across capacitor in volts
-float time; // time in seconds
-float period; // period of RC circuit in seconds
-unsigned long startTime; // start time of function in milliseconds
-unsigned long endTime; // end time of function in milliseconds
+#include <math.h>
 
-// Define a function to find the resonant frequency and resistance of the RC circuit
-void findResonance() {
-  // Set the output pin to high
-  digitalWrite(outputPin, HIGH);
-  // Record the start time of the function
-  startTime = millis();
-  // Wait for the capacitor to charge up to 63.2% of the supply voltage (time constant)
-  while (analogRead(inputPin) < 0.632 * 1023) {
-    // Do nothing
-  }
-  // Record the end time of the charging phase
-  endTime = millis();
-  // Calculate the time elapsed in seconds
-  time = (endTime - startTime) / 1000.0;
-  // Calculate the resistance using the formula R = t / C
-  resistance = time / capacitance;
-  // Set the output pin to low
-  digitalWrite(outputPin, LOW);
-  // Wait for the capacitor to discharge down to 36.8% of the supply voltage (time constant)
-  while (analogRead(inputPin) > 0.368 * 1023) {
-    // Do nothing
-  }
-  // Record the end time of the discharging phase
-  endTime = millis();
-  // Calculate the time elapsed in seconds
-  time = (endTime - startTime) / 1000.0;
-  // Calculate the period using the formula T = 2 * t
-  period = 2 * time;
-  // Calculate the frequency using the formula f = 1 / T
-  frequency = 1 / period;
-}
+const int PIN_OUT = 9;
+const int PIN_IN = A0;
+const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
 
-// Setup function runs once when the Arduino is powered on or reset
 void setup() {
-  // Set the output pin as an output
-  pinMode(outputPin, OUTPUT);
-  // Set the input pin as an input
-  pinMode(inputPin, INPUT);
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
+  Serial.begin(9600);
 }
 
-// Loop function runs repeatedly after the setup function is completed
 void loop() {
-  // Call the findResonance function every 60 seconds
-  findResonance();
+  // Use a fixed frequency for a single R2 measurement
+  float freq = 20.0;
+  float vpp = measureVpp(freq);
+  float ratio = vpp / VCC;
   
-// Print the results to the serial monitor
-Serial.print("Resistance: ");
-Serial.print(resistance);
-Serial.println(" ohms");
-Serial.print("Frequency: ");
-Serial.print(frequency);
-Serial.println(" hertz");
+  if (ratio < 0.99) {
+    float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
+    float tau = 1.0 / (4.0 * freq * artanh_val);
+    float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
+    Serial.print("R2: "); Serial.println(r2);
+  }
+  delay(60000);
+}
 
-// Wait for one minute before repeating the loop
-delay(60000);
+float measureVpp(float freq) {
+  uint32_t half = 500000.0 / freq;
+  float vMax = 0, vMin = 5.0;
+  uint32_t start = millis();
+  while(millis() - start < 200) {
+    digitalWrite(PIN_OUT, HIGH);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    float v = analogRead(PIN_IN) * (VCC/1023.0);
+    if (v > vMax) vMax = v;
+    digitalWrite(PIN_OUT, LOW);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    v = analogRead(PIN_IN) * (VCC/1023.0);
+    if (v < vMin) vMin = v;
+  }
+  return vMax - vMin;
 }

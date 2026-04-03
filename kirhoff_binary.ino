@@ -1,75 +1,52 @@
+/*
+ * Kirchhoff-based R2 measurement in kirhoff_binary.ino.
+ * Uses binary search to find the frequency providing maximum analog voltage reading.
+ */
 
-// Define constants and variables
-#define MAX_CURRENT 0.02 // Maximum current in amps
-#define CAPACITANCE 0.00001 // Capacitance in farads
-#define OUTPUT_PIN 13 // Digital output pin connected to RC circuit
-#define INPUT_PIN A0 // Analog input pin connected to capacitor
-#define INTERVAL 60000 // Interval in milliseconds to check resistance
+#include <math.h>
 
-float resistance; // Resistance in ohms
-float frequency; // Frequency in hertz
-float period; // Period in seconds
-float pulse; // Pulse length in seconds
-float voltage; // Voltage across capacitor in volts
-float max_voltage; // Maximum voltage across capacitor in volts
-float min_pulse; // Minimum pulse length in seconds
-float max_pulse; // Maximum pulse length in seconds
+const int PIN_OUT = 9;
+const int PIN_IN = A0;
+const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
 
-// Initialize the serial monitor and the pins
 void setup() {
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
-  pinMode(OUTPUT_PIN, OUTPUT);
-  pinMode(INPUT_PIN, INPUT);
 }
 
-// Main loop
 void loop() {
-  // Call the function to find the resistance and the frequency every interval
-  find_resistance_and_frequency();
-  Serial.print("Resistance: ");
-  Serial.println(resistance);
-  Serial.print("Frequency: ");
-  Serial.println(frequency);
-  delay(INTERVAL);
+  float fLow = 0.1, fHigh = 1000.0, targetVpp = 3.6;
+  for(int i=0; i<12; i++) {
+    float fMid = (fLow + fHigh) / 2.0;
+    if (measureVpp(fMid) > targetVpp) fLow = fMid; else fHigh = fMid;
+  }
+  float bestF = (fLow + fHigh) / 2.0;
+  float vpp = measureVpp(bestF);
+  float ratio = vpp / VCC;
+  if (ratio < 0.99) {
+    float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
+    float tau = 1.0 / (4.0 * bestF * artanh_val);
+    float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
+    Serial.print("Freq: "); Serial.print(bestF);
+    Serial.print(" Hz, R2: "); Serial.println(r2);
+  }
+  delay(60000);
 }
 
-// Function to find the resistance and the frequency using binary search
-void find_resistance_and_frequency() {
-  // Initialize the pulse range based on the previous frequency or a default value
-  if (frequency == 0) {
-    frequency = 1000; // Default frequency in hertz
+float measureVpp(float freq) {
+  uint32_t half = 500000.0 / freq;
+  float vMax = 0, vMin = 5.0;
+  uint32_t start = millis();
+  while(millis() - start < 150) {
+    digitalWrite(PIN_OUT, HIGH);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    float v = analogRead(PIN_IN) * (VCC/1023.0);
+    if (v > vMax) vMax = v;
+    digitalWrite(PIN_OUT, LOW);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    v = analogRead(PIN_IN) * (VCC/1023.0);
+    if (v < vMin) vMin = v;
   }
-  period = 1 / frequency; // Period in seconds
-  pulse = period / 2; // Pulse length in seconds
-  min_pulse = pulse / 2; // Minimum pulse length in seconds
-  max_pulse = pulse * 2; // Maximum pulse length in seconds
-
-  // Loop until the pulse range is small enough
-  while (max_pulse - min_pulse > 0.000001) {
-    // Send a pulse to the RC circuit and read the voltage across the capacitor
-    digitalWrite(OUTPUT_PIN, HIGH);
-    delayMicroseconds(pulse * 1000000);
-    digitalWrite(OUTPUT_PIN, LOW);
-    delayMicroseconds(pulse * 1000000);
-    voltage = analogRead(INPUT_PIN) * (5.0 / 1023.0);
-
-    // Compare the voltage with the maximum voltage and adjust the pulse range accordingly
-    if (voltage > max_voltage) {
-      max_voltage = voltage;
-      frequency = 1 / (pulse * 2); // Frequency in hertz
-      min_pulse = pulse;
-      pulse = (pulse + max_pulse) / 2;
-    } else {
-      max_pulse = pulse;
-      pulse = (pulse + min_pulse) / 2;
-    }
-  }
-
-  // Calculate the resistance using Kirchhoff's law and Ohm's law
-  // Vout = Vin * (1 - exp(-t / (RC)))
-  // Vout / Vin = (1 - exp(-t / (RC)))
-  // ln(1 - Vout / Vin) = -t / (RC)
-  // R = -t / (C * ln(1 - Vout / Vin))
-  
-  resistance = -pulse / (CAPACITANCE * log(1 - max_voltage / MAX_CURRENT));
+  return vMax - vMin;
 }
