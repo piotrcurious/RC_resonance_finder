@@ -1,20 +1,15 @@
 /*
- * Corrected specialized measurement in dual_RC_convergent.ino.
- * Uses 2nd-order RC ladder theory and 2nd-order Kalman filter for R2 tracking.
- * Convergent measurement strategy based on the two separate time constants.
+ * Specialized Two-Frequency Measurement in dual_RC_convergent.ino.
+ * Uses a high frequency to characterize the first stage (R0, R1, C1)
+ * and a low frequency for the total ladder (R2, C2).
+ * This version dynamically estimates Ra from high-frequency data.
  */
 
 #include <math.h>
 
 const int PIN_OUT = 9;
 const int PIN_IN = A0;
-const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
-
-// Kalman Filter variables (R2 and dR2)
-float x_state[2] = {1000.0, 0.0};
-float P_cov[2][2] = {{1e6, 0}, {0, 1e3}};
-float Q_proc[2][2] = {{10.0, 0}, {0, 1.0}};
-float R_meas = 500.0;
+const float R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
 
 void setup() {
   pinMode(PIN_OUT, OUTPUT);
@@ -22,61 +17,49 @@ void setup() {
   Serial.begin(9600);
 }
 
-void safeDelayMicros(unsigned long us) {
-  if (us > 16000) { delay(us/1000); delayMicroseconds(us%1000); }
-  else delayMicroseconds(us);
-}
-
 float measureVpp(float freq) {
   unsigned long half = 500000.0 / freq;
-  float vMax = 0, vMin = 5.0;
-  unsigned long s = millis();
-  while(millis() - s < 150) {
-    digitalWrite(PIN_OUT, HIGH); safeDelayMicros(half);
-    float v = analogRead(PIN_IN) * (VCC/1023.0);
-    if (v > vMax) vMax = v;
-    digitalWrite(PIN_OUT, LOW); safeDelayMicros(half);
-    v = analogRead(PIN_IN) * (VCC/1023.0);
-    if (v < vMin) vMin = v;
+  float vSumMax = 0, vSumMin = 0;
+  int count = 0;
+  unsigned long start = millis();
+  while(millis() - start < 300) {
+    digitalWrite(PIN_OUT, HIGH);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    vSumMax += (analogRead(PIN_IN) * VCC) / 1023.0;
+    digitalWrite(PIN_OUT, LOW);
+    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
+    vSumMin += (analogRead(PIN_IN) * VCC) / 1023.0;
+    count++;
   }
-  return vMax - vMin;
-}
-
-void updateKalman(float z) {
-  x_state[0] += x_state[1];
-  P_cov[0][0] += P_cov[1][1] + Q_proc[0][0];
-  P_cov[1][1] += Q_proc[1][1];
-  float S = P_cov[0][0] + R_meas;
-  float K0 = P_cov[0][0] / S;
-  float K1 = P_cov[1][0] / S;
-  float y = z - x_state[0];
-  x_state[0] += K0 * y;
-  x_state[1] += K1 * y;
-  float p01 = P_cov[0][1];
-  P_cov[0][0] *= (1.0 - K0);
-  P_cov[1][1] -= K1 * p01;
-  P_cov[0][1] *= (1.0 - K0);
-  P_cov[1][0] = P_cov[0][1];
+  return (vSumMax - vSumMin) / count;
 }
 
 void loop() {
-  static float lastF = 22.0;
-  float fLow = lastF * 0.5, fHigh = lastF * 2.0;
-  if (fLow < 0.1) fLow = 0.1; if (fHigh > 2000.0) fHigh = 2000.0;
-  if (measureVpp(fLow) < 3.6 || measureVpp(fHigh) > 3.6) { fLow = 0.05; fHigh = 2000.0; }
-  for(int i=0; i<10; i++) {
-    float fMid = (fLow + fHigh) / 2.0;
-    if (measureVpp(fMid) > 3.6) fLow = fMid; else fHigh = fMid;
+  // 1. High Frequency measurement (~2000 Hz)
+  // C2 is approx a short. Vpp_node1 = Vcc * (1/(w*C1)) / sqrt(Ra^2 + (1/wC1)^2)
+  float fHigh = 2000.0;
+  float vpp_high = measureVpp(fHigh);
+  float gHigh = vpp_high / VCC;
+  float wHigh = 2.0 * PI * fHigh;
+  // Estimation of Ra: Ra = sqrt((1/gHigh)^2 - 1) / (wHigh * C1)
+  float Ra_est = sqrt(1.0/(gHigh*gHigh + 1e-6) - 1.0) / (wHigh * C1);
+  if (Ra_est < 100.0) Ra_est = 251.0; // Fallback
+
+  // 2. Low Frequency measurement (~20 Hz)
+  float fLow = 20.0;
+  float vpp_low = measureVpp(fLow);
+  float gLow = vpp_low / VCC;
+
+  // Solve for R2 using the estimated Ra
+  if (gLow < 0.99) {
+    float artanh_val = 0.5 * log((1.0 + gLow) / (1.0 - gLow));
+    float tau = 1.0 / (4.0 * fLow * artanh_val);
+    float r2 = (tau - Ra_est * (C1 + C2)) / C2;
+
+    Serial.print("Ra_Est_Ohm:"); Serial.print(Ra_est);
+    Serial.print(" Vpp_Low_V:"); Serial.print(vpp_low);
+    Serial.print(" R2_Ohm:"); Serial.println(r2);
   }
-  lastF = (fLow + fHigh) / 2.0;
-  float vpp = measureVpp(lastF);
-  float ratio = vpp / VCC;
-  if (ratio < 0.99) {
-    float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
-    float tau = 1.0 / (4.0 * lastF * artanh_val);
-    float measR = (tau - (R0+R1)*(C1+C2)) / C2;
-    updateKalman(measR);
-    Serial.print("R_est: "); Serial.println(x_state[0]);
-  }
+
   delay(60000);
 }
