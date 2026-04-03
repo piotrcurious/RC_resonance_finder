@@ -1,191 +1,35 @@
 /*
- * Improved solution for RC Resistance Measurement using 2nd-order RC ladder theory
- * and square-wave response analysis.
- * Circuit: Pin (R0=250) -- R1(1) --+-- R2(Unknown) --+-- A0
- *                                  |                 |
- *                                 C1(0.5uF)         C2(10uF)
- *                                  |                 |
- *                                 GND               GND
- *
- * This version uses a Frequency-Sweep/Binary Search with seeding to find the
- * frequency where the gain is approx 0.72 (Vpp ~ 3.6V).
- * This target is more suitable for square-wave response than the 0.5 sine-wave target.
- * R2 is calculated using the square-wave response model Vpp = Vcc * tanh(1 / (4*f*tau)).
+ * Refactored Optimized RC Measurement using RCLadder library.
  */
 
-#include <math.h>
+#include "RCLadder.h"
 
-// Pin Definitions
-const int PIN_OUT = 3;
-const int PIN_IN = A0;
+RCLadder meter(3, A0, 1.0, 0.5e-6, 10.0e-6);
 
-// Known Constants
-const float R0 = 250.0;    // Pin internal resistance
-const float R1 = 1.0;      // First stage resistor
-const float C1 = 0.5e-6;   // First stage capacitor
-const float C2 = 10.0e-6;  // Second stage capacitor
-const float VCC = 5.0;
-
-// Variables for measurement and search
-float estimatedR2 = 1000.0; // Kalman state: estimate of R2
-float lastResonantFreq = 22.0; // Seed for binary search (target frequency)
-
-// Kalman Filter variables (2-state tracking: R2 and dR2/dt)
-float x_state[2] = {1000.0, 0.0}; // {R2, dR2}
-float P_cov[2][2] = {{1000000.0, 0.0}, {0.0, 1000.0}};
-float Q_proc[2][2] = {{10.0, 0.0}, {0.0, 1.0}};
-float R_meas = 500.0;
-
-// Time tracking
-unsigned long lastMeasureTime = 0;
-const unsigned long INTERVAL = 60000; // 60 seconds
+unsigned long lastTime = 0;
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
-  Serial.println("RC Resistance Meter Starting...");
-}
-
-// Helper for delays longer than delayMicroseconds limit
-void safeDelayMicros(unsigned long us) {
-  if (us > 16000) {
-    delay(us / 1000);
-    delayMicroseconds(us % 1000);
-  } else {
-    delayMicroseconds(us);
-  }
-}
-
-// Measure Vpp with square wave
-// Averages multiple peak/trough readings for outlier rejection and noise immunity.
-float measureVpp(float freq) {
-  if (freq < 0.01) freq = 0.01;
-  unsigned long period = 1000000.0 / freq;
-  unsigned long halfPeriod = period / 2;
-
-  float vSumMax = 0, vSumMin = 0;
-  int count = 0;
-
-  // Measurement window: max(300ms, 2.0 * period)
-  unsigned long window = 300;
-  if (period > 150000) window = (period * 2.0) / 1000;
-
-  unsigned long startTime = millis();
-  while (millis() - startTime < window) {
-    digitalWrite(PIN_OUT, HIGH);
-    safeDelayMicros(halfPeriod);
-    float vHigh = analogRead(PIN_IN) * (VCC / 1023.0);
-
-    digitalWrite(PIN_OUT, LOW);
-    safeDelayMicros(halfPeriod);
-    float vLow = analogRead(PIN_IN) * (VCC / 1023.0);
-
-    vSumMax += vHigh;
-    vSumMin += vLow;
-    count++;
-
-    if (millis() - startTime > 6000) break; // Absolute timeout (6s)
-  }
-
-  if (count == 0) return 0;
-  return (vSumMax - vSumMin) / count;
-}
-
-// Solve for R2 using Square Wave model: Vpp = Vcc * tanh(1 / (4*f*RC))
-float solveForR2(float freq, float vpp) {
-  if (vpp <= 0.1) return 1000000.0;
-  float ratio = vpp / VCC;
-  if (ratio >= 0.99) return 1.0;
-
-  // artanh(ratio) = 0.5 * ln((1+ratio)/(1-ratio))
-  float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
-  float tau = 1.0 / (4.0 * freq * artanh_val);
-
-  float Ra = R0 + R1;
-  // Refined model: tau_eff = Ra(C1+C2) + R2*C2
-  float r2 = (tau - Ra * (C1 + C2)) / C2;
-
-  if (r2 < 0.1) r2 = 0.1;
-  return r2;
-}
-
-// 2nd-order Kalman filter for R2
-void updateKalman(float measurement) {
-  // Predict
-  x_state[0] = x_state[0] + x_state[1]; // x = x + dx
-  P_cov[0][0] += P_cov[1][1] + Q_proc[0][0];
-  P_cov[1][1] += Q_proc[1][1];
-
-  // Update
-  float K[2];
-  float S = P_cov[0][0] + R_meas;
-  K[0] = P_cov[0][0] / S;
-  K[1] = P_cov[1][0] / S;
-
-  float y = measurement - x_state[0];
-  x_state[0] += K[0] * y;
-  x_state[1] += K[1] * y;
-
-  float P00_temp = P_cov[0][0];
-  P_cov[0][0] = (1.0 - K[0]) * P_cov[0][0];
-  P_cov[1][1] = P_cov[1][1] - K[1] * P_cov[0][1];
-  P_cov[0][1] = (1.0 - K[0]) * P_cov[0][1];
-  P_cov[1][0] = P_cov[0][1];
-
-  estimatedR2 = x_state[0];
 }
 
 void loop() {
-  unsigned long now = millis();
-  if (now - lastMeasureTime >= INTERVAL || lastMeasureTime == 0) {
-    lastMeasureTime = now;
+  if (millis() - lastTime >= 60000 || lastTime == 0) {
+    lastTime = millis();
 
-    // Binary search for frequency that gives Gain ~ 0.72 (Vpp ~ 3.6V)
-    // Re-seed from Kalman estimate for even faster convergence
-    float Ra = R0 + R1;
-    float targetTau = 1.0 / (4.0 * 22.0 * 0.895); // default guess tau
-    if (estimatedR2 > 0) {
-      targetTau = Ra * (C1 + C2) + estimatedR2 * C2;
+    // Find target frequency
+    float fL = 0.1, fH = 1000.0;
+    for (int i=0; i<10; i++) {
+      float fM = (fL + fH) / 2.0;
+      if (meter.measureVpp(fM) > 3.6) fL = fM; else fH = fM;
     }
-    float fGuess = 1.0 / (4.0 * targetTau * 0.895); // artanh(0.72) ~ 0.895
+    float f = (fL + fH) / 2.0;
+    float vpp = meter.measureVpp(f);
+    float rawR = meter.solveR2(f, vpp);
 
-    float fLow = fGuess * 0.7;
-    float fHigh = fGuess * 1.4;
-    if (fLow < 0.01) fLow = 0.01;
-    if (fHigh > 5000.0) fHigh = 5000.0;
+    meter.updateKalman(rawR);
 
-    float targetVpp = 3.6;
-
-    // Autorange: if target is outside [fLow, fHigh], expand range until captured
-    while (measureVpp(fLow) < targetVpp && fLow > 0.005) fLow *= 0.5;
-    while (measureVpp(fHigh) > targetVpp && fHigh < 10000.0) fHigh *= 2.0;
-
-    for (int i = 0; i < 10; i++) {
-      float fMid = (fLow + fHigh) / 2.0;
-      float vpp = measureVpp(fMid);
-      if (vpp > targetVpp) fLow = fMid;
-      else fHigh = fMid;
-    }
-
-    float bestFreq = (fLow + fHigh) / 2.0;
-    lastResonantFreq = bestFreq;
-    float measuredVpp = measureVpp(bestFreq);
-
-    float currentR2 = solveForR2(bestFreq, measuredVpp);
-
-    // Circuit Integrity Checks
-    if (measuredVpp < 0.1) {
-      Serial.println("ALERT: Possible Short Circuit or No Power");
-    } else if (bestFreq < 0.02 && measuredVpp > 4.8) {
-      Serial.println("ALERT: Possible Open Circuit (R2 too high)");
-    }
-
-    updateKalman(currentR2);
-
-    Serial.print("Freq_Hz:"); Serial.print(bestFreq);
-    Serial.print(" Vpp_V:"); Serial.print(measuredVpp);
-    Serial.print(" R2_Raw_Ohm:"); Serial.print(currentR2);
-    Serial.print(" R2_Est_Ohm:"); Serial.println(estimatedR2);
+    Serial.print("R2_Raw:"); Serial.print(rawR);
+    Serial.print(" R2_Est:"); Serial.print(meter.getEstimate());
+    Serial.print(" Confidence:"); Serial.println(meter.getConfidence());
   }
 }
