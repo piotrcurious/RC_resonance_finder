@@ -30,24 +30,30 @@ void loop() {
   unsigned long startT = micros();
 
   float y_sum = 0, x_sum = 0, xy_sum = 0, x2_sum = 0;
+  float cy = 0, cx = 0, cxy = 0, cx2 = 0; // Kahan compensators
   int n = 0;
 
   for (int i = 0; i < 20; i++) {
-    int raw = analogRead(PIN_IN);
-    unsigned long t = micros() - startT; // High-precision timestamp
+    int raw = analogRead(PIN_IN_VAL);
+    unsigned long t = micros() - startT;
     float v = (raw * VCC) / 1023.0;
 
-    if (v > 0.2) { // Log valid range
+    if (v > 0.2) {
       float lnV = log(v);
       float timeS = (float)t / 1e6;
 
-      y_sum += lnV;
-      x_sum += timeS;
-      xy_sum += lnV * timeS;
-      x2_sum += timeS * timeS;
+      // Kahan y_sum
+      float dy = lnV - cy; float ty = y_sum + dy; cy = (ty - y_sum) - dy; y_sum = ty;
+      // Kahan x_sum
+      float dx = timeS - cx; float tx = x_sum + dx; cx = (tx - x_sum) - dx; x_sum = tx;
+      // Kahan xy_sum
+      float dxy = (lnV * timeS) - cxy; float txy = xy_sum + dxy; cxy = (txy - xy_sum) - dxy; xy_sum = txy;
+      // Kahan x2_sum
+      float dx2 = (timeS * timeS) - cx2; float tx2 = x2_sum + dx2; cx2 = (tx2 - x2_sum) - dx2; x2_sum = tx2;
+
       n++;
     }
-    delay(10); // Sample every 10ms
+    delay(1);
   }
 
   if (n > 5) {
