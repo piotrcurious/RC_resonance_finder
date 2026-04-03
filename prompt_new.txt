@@ -1,0 +1,20 @@
+Write ESP32 Arduino code to estimate an unknown resistor in a two-stage RC network by driving the network from a digital output pin and measuring capacitor voltage on an analog input.
+
+Assume:
+- Stage 1: R1 = 1 ohm, C1 = 0.5 uF
+- Stage 2: C2 = 10 uF, R2 is unknown
+- The ESP32 output pin is modeled with an effective source resistance based on a 20 mA current limit
+- The capacitor voltage of stage 2 is read on ADC input A0 / GPIO34
+
+Use a binary search seeded by the previous estimate to find the pulse width that brings the capacitor close to 63.2% of the measured charge span, then refine the estimate with multiple samples and a Kalman filter.
+
+Run the estimate once every 60 seconds.
+
+Use comments to explain the equations:
+Vc(t) = V0 + (VCC - V0) * (1 - exp(-t / tau))
+tau = R_total * C
+R2 = tau / C2 - R_source - R1
+
+Because an RC circuit has no true resonance, use step-response timing instead of frequency resonance.
+
+Track the previous estimate and use it to seed the next search. Make the Kalman filter estimate both tau and its rate of change so the code can detect convergence. Include robust averaging, bracket expansion if needed, and clear serial output.
