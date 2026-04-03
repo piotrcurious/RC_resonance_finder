@@ -20,7 +20,7 @@ void loop() {
   for(int i=0; i<12; i++) {
     float fMid = (fLow + fHigh) / 2.0;
     float period = 1000000.0 / fMid;
-    float crossing = meter.findCrossingMicros(fMid, 512);
+    float crossing = meter.findCrossingMicros(fMid, 204);
 
     // In 2nd order, 90 deg phase means crossing happens at T/4
     if (crossing < period / 4.0) fLow = fMid;
