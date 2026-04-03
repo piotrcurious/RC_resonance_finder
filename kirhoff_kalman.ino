@@ -1,6 +1,6 @@
 /*
- * Improved Kirchhoff-based measurement in kirhoff_kalman.ino.
- * Uses 2nd-order RC ladder theory and binary search for a gain target.
+ * Differentiated Kalman: kirhoff_kalman.ino.
+ * Uses a 2nd-order Kalman filter (R2 and dR2) with direct voltage measurement updates.
  */
 
 #include <math.h>
@@ -8,6 +8,12 @@
 const int PIN_OUT = 9;
 const int PIN_IN = A0;
 const float R0 = 250.0, R1 = 1.0, C1 = 0.5e-6, C2 = 10.0e-6, VCC = 5.0;
+
+// Kalman Filter variables
+float x_state[2] = {1000.0, 0.0};
+float P_cov[2][2] = {{1e6, 0}, {0, 1e3}};
+float Q_proc[2][2] = {{10.0, 0}, {0, 1.0}};
+float R_meas = 500.0;
 
 void setup() {
   pinMode(PIN_OUT, OUTPUT);
@@ -17,35 +23,50 @@ void setup() {
 
 float measureVpp(float freq) {
   unsigned long half = 500000.0 / freq;
-  float vMax = 0, vMin = 5.0;
-  unsigned long s = millis();
-  while(millis() - s < 100) {
+  float vSumMax = 0, vSumMin = 0;
+  int count = 0;
+  unsigned long start = millis();
+  unsigned long window = 200; if (half > 133333) window = (half * 1.5) / 1000;
+  while(millis() - start < window) {
     digitalWrite(PIN_OUT, HIGH);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    float v = analogRead(PIN_IN) * (VCC/1023.0);
-    if (v > vMax) vMax = v;
+    vSumMax += (analogRead(PIN_IN) * VCC) / 1023.0;
     digitalWrite(PIN_OUT, LOW);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    v = analogRead(PIN_IN) * (VCC/1023.0);
-    if (v < vMin) vMin = v;
+    vSumMin += (analogRead(PIN_IN) * VCC) / 1023.0;
+    count++;
   }
-  return vMax - vMin;
+  return (vSumMax - vSumMin) / (count + 1e-6);
+}
+
+void updateKalman(float z) {
+  x_state[0] += x_state[1];
+  P_cov[0][0] += P_cov[1][1] + Q_proc[0][0];
+  P_cov[1][1] += Q_proc[1][1];
+  float S = P_cov[0][0] + R_meas;
+  float K0 = P_cov[0][0] / S;
+  float K1 = P_cov[1][0] / S;
+  float y = z - x_state[0];
+  x_state[0] += K0 * y;
+  x_state[1] += K1 * y;
+  float p01 = P_cov[0][1];
+  P_cov[0][0] *= (1.0 - K0);
+  P_cov[1][1] -= K1 * p01;
+  P_cov[0][1] *= (1.0 - K0);
+  P_cov[1][0] = P_cov[0][1];
 }
 
 void loop() {
-  float fL = 0.1, fH = 1000.0, targetVpp = 3.6;
-  for(int i=0; i<10; i++) {
-    float fM = (fL + fH) / 2.0;
-    if (measureVpp(fM) > targetVpp) fL = fM; else fH = fM;
-  }
-  float bestF = (fL + fH) / 2.0;
-  float vpp = measureVpp(bestF);
+  float freq = 20.0;
+  float vpp = measureVpp(freq);
   float ratio = vpp / VCC;
+
   if (ratio < 0.99) {
     float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
-    float tau = 1.0 / (4.0 * bestF * artanh_val);
-    float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
-    Serial.print("R2: "); Serial.println(r2);
+    float tau = 1.0 / (4.0 * freq * artanh_val);
+    float measR = (tau - (R0+R1)*(C1+C2)) / C2;
+    updateKalman(measR);
+    Serial.print("R_est:"); Serial.println(x_state[0]);
   }
   delay(60000);
 }
