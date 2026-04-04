@@ -47,6 +47,6 @@ void loop() {
   float tau = 1.0 / (4.0 * f * artanh_val);
   float r2 = (tau - RA_INO*(C1+C2)) / C2;
 
-  Serial.print("R2: "); Serial.println(r2);
+  Serial.print("R2_Raw: "); Serial.println(r2);
   delay(60000);
 }

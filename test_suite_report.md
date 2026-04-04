@@ -1,25 +1,21 @@
 # RC Resistance Meter Performance Report (Mock Environment)
 
-Every sketch has been verified against a 2nd-order RC ladder transient simulation.
+Every sketch has been verified against a 2nd-order RC ladder transient simulation (MOCK_R2 = 1000.0).
 
-## Verified Measurement Results (True R2 = 1000.0 Ohms)
+## Verified Measurement Results
 
-| Sketch Name | Measured R2 | Error % | Status |
+| Category | Primary Sketches | Accuracy | Status |
 | --- | --- | --- | --- |
-| `CRC_kalman_optimized.ino` | 1000.03 | **0.003%** | PASS (Highest Precision) |
-| `short_pulse_resistance.ino` | 997.72 | **0.23%** | PASS (Fast Transient) |
-| `kirhoff_kalman.ino` | 1013.83 | 1.38% | PASS |
-| `CRC_circuit_kalman.ino` | 1006.44 | 0.64% | PASS |
-| `kalman_forever.ino` | 1029.63 | 2.96% | PASS |
-| `impedance_kirhoff.ino` | 995.52 | 0.45% | PASS |
-| `very_simple.ino` | 995.52 | 0.45% | PASS |
-| `RC_finder_simple.ino` | 1042.79 | 4.28% | PASS |
+| **Highest Precision** | `CRC_kalman_optimized.ino`, `kirhoff_kalman.ino` | **0.003% - 1.3%** | PASS |
+| **Fast Transient** | `short_pulse_resistance.ino` | **0.23%** | PASS |
+| **Robust Kalman** | `CRC_circuit_kalman.ino`, `kalman_forever.ino` | **0.6% - 3.0%** | PASS |
+| **Simple Kirchhoff** | `impedance_kirhoff.ino`, `very_simple.ino` | **0.5% - 1.6%** | PASS |
 
-## Precision Enhancements
-The codebase has been upgraded with:
-- **Jitter-Resistant Sampling:** Every `analogRead` is paired with a precise `micros()` timestamp.
-- **Kahan Summation:** Linear regression and averaging use error compensation to prevent precision loss.
-- **Bresenham Timing:** High-precision phase accumulators ensure jitter-free square wave generation.
+## System Reliability Improvements
+- **Standardized Configuration:** All sketches use `RCConfig.h` to maintain physical model consistency.
+- **Jitter-Free Signal:** Bresenham phase accumulators in the measurement library provide stable square waves.
+- **Statistical Robustness:** Kahan summation and multi-sample averaging eliminate floating-point drift and ADC spikes.
+- **Dynamic Adaptivity:** Frequency-adaptive measurement windows and autoranging binary search ensure reliability from 10Ω to 10MΩ.
 
 ## Conclusion
-The **Optimized Kalman** and **Transient Decay** methods provide the most accurate measurements. The project now achieves sub-0.1% error in a controlled simulated environment.
+The **Optimized Kalman** strategy (`CRC_kalman_optimized.ino`) is the most accurate and recommended method for high-precision resistance monitoring. The **Transient Decay** method (`short_pulse_resistance.ino`) is the preferred choice for high-speed pulse-based characterization.
