@@ -1,17 +1,16 @@
-const int PIN_OUT_VAL = 3;
-const int PIN_IN_VAL = A0;
+// Redefinition of PIN_OUT removed
+// Redefinition of PIN_IN removed
 float measureVpp(float freq);
-#include "RCConfig.h"
+#include "src/RCConfig.h"
 /*
  * PID-controlled R2 measurement for 2nd-order RC ladder.
  * Uses a PID loop to adjust frequency until Vpp matches target.
  */
-
-const float C1_val = 0.5e-6;
-const float C2_val = 10.0e-6;
-const float R0_val = 250.0;
-const float R1_val = 1.0;
-#define VCC 5.0
+// Redefinition of C1 removed
+// Redefinition of C2 removed
+// Redefinition of R0 removed
+// Redefinition of R1 removed
+// #define VCC removed
 
 // PID Constants
 float Kp = 5.0, Ki = 1.0, Kd = 0.1;
@@ -20,8 +19,8 @@ float currentFreq = 22.0;
 float integral = 0, lastError = 0;
 
 void setup() {
-  pinMode(PIN_OUT_VAL, OUTPUT);
-  pinMode(PIN_IN_VAL, INPUT);
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
 }
 
@@ -31,13 +30,13 @@ float measureVpp(float freq) {
   float vMax = 0, vMin = 5.0;
   unsigned long start = millis();
   while(millis() - start < 100) {
-    digitalWrite(PIN_OUT_VAL, HIGH);
+    digitalWrite(PIN_OUT, HIGH);
     if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
-    float v = analogRead(PIN_IN_VAL) * (VCC / 1023.0);
+    float v = analogRead(PIN_IN) * (VCC / 1023.0);
     if (v > vMax) vMax = v;
-    digitalWrite(PIN_OUT_VAL, LOW);
+    digitalWrite(PIN_OUT, LOW);
     if (halfPeriod > 16000) delay(halfPeriod/1000); else delayMicroseconds(halfPeriod);
-    v = analogRead(PIN_IN_VAL) * (VCC / 1023.0);
+    v = analogRead(PIN_IN) * (VCC / 1023.0);
     if (v < vMin) vMin = v;
   }
   return vMax - vMin;
@@ -64,7 +63,7 @@ void loop() {
     float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
     Serial.print("Freq_Hz: "); Serial.print(currentFreq);
     Serial.print(" Hz, Vpp: "); Serial.print(vpp);
-    Serial.print(" V, R2_Raw: "); Serial.println(r2);
+    Serial.print(" V, R2_Est:"); Serial.println(r2);
   }
 
   delay(100);

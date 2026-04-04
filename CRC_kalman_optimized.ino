@@ -1,10 +1,10 @@
 float measureVpp(float freq);
-#include "RCConfig.h"
+#include "src/RCConfig.h"
 /*
  * Refactored Optimized RC Measurement using RCLadder library.
  */
 
-#include "RCLadder.h"
+#include "src/RCLadder.h"
 
 RCLadder meter(3, A0, 1.0, 0.5e-6, 10.0e-6);
 
@@ -30,7 +30,7 @@ void loop() {
 
     meter.updateKalman(rawR);
 
-    Serial.print("R2_Raw:"); Serial.print(rawR);
+    Serial.print("R2_Est:"); Serial.print(rawR);
     Serial.print(" R2_Est:"); Serial.print(meter.getEstimate());
     Serial.print(" Confidence:"); Serial.println(meter.getConfidence());
   }

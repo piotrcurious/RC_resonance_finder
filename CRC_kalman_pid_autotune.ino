@@ -1,5 +1,5 @@
 float measureVpp(float freq);
-#include "RCConfig.h"
+#include "src/RCConfig.h"
 /*
  * Advanced PID Autotuning in CRC_kalman_pid_autotune.ino.
  * Uses a relay-feedback method to identify the ultimate gain (Ku)
@@ -8,15 +8,15 @@ float measureVpp(float freq);
 
 #include <math.h>
 
-const int PIN_OUT_VAL = 3;
-const int PIN_IN_VAL = A0;
+const int PIN_OUT = 3;
+const int PIN_IN = A0;
 
 float targetVpp = 3.6;
 float currentFreq = 22.0;
 
 void setup() {
-  pinMode(PIN_OUT_VAL, OUTPUT);
-  pinMode(PIN_IN_VAL, INPUT);
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
   Serial.println("Starting PID Autotune (Relay Method)...");
 
@@ -30,12 +30,12 @@ float measureVpp(float freq) {
   int count = 0;
   unsigned long start = millis();
   while(millis() - start < 200) {
-    digitalWrite(PIN_OUT_VAL, HIGH);
+    digitalWrite(PIN_OUT, HIGH);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    vSumMax += (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
-    digitalWrite(PIN_OUT_VAL, LOW);
+    vSumMax += (analogRead(PIN_IN) * VCC) / 1023.0;
+    digitalWrite(PIN_OUT, LOW);
     if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    vSumMin += (analogRead(PIN_IN_VAL) * VCC) / 1023.0;
+    vSumMin += (analogRead(PIN_IN) * VCC) / 1023.0;
     count++;
   }
   return (vSumMax - vSumMin) / (count + 1e-6);
@@ -77,7 +77,14 @@ void autoTune() {
 
 void loop() {
   float vpp = measureVpp(currentFreq);
-  Serial.print("Freq_Hz:"); Serial.print(currentFreq);
-  Serial.print(" Vpp_V:"); Serial.println(vpp);
+  float ratio = vpp / VCC;
+  if (ratio < 0.99) {
+    float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
+    float tau = 1.0 / (4.0 * currentFreq * artanh_val);
+    float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
+    Serial.print("Freq_Hz:"); Serial.print(currentFreq);
+    Serial.print(" Vpp_V:"); Serial.print(vpp);
+    Serial.print(" R2_Est:"); Serial.println(r2);
+  }
   delay(5000);
 }

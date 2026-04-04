@@ -3,7 +3,7 @@
  * Uses a logarithmic sweep with parabolic interpolation to find the corner frequency.
  */
 
-#include "RCConfig.h"
+#include "src/RCConfig.h"
 
 float measureVpp(float freq);
 
@@ -64,7 +64,7 @@ void loop() {
   float r2 = (1.0/w - (R0+R1)*(C1+C2)) / C2;
 
   Serial.print("CornerFreq_Hz:"); Serial.print(preciseF);
-  Serial.print(" R2_Ohm:"); Serial.println(r2);
+  Serial.print(" R2_Est:"); Serial.println(r2);
 
   delay(60000);
 }

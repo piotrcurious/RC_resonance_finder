@@ -1,4 +1,4 @@
-#include "RCConfig.h"
+#include "src/RCConfig.h"
 /*
  * Advanced Transient Analysis in short_pulse_resistance.ino.
  * Samples multiple points during exponential discharge and uses
@@ -6,27 +6,26 @@
  */
 
 #include <math.h>
-
-const int PIN_OUT_VAL = 3;
-const int PIN_IN_VAL = A0;
+// Redefinition of PIN_OUT removed
+// Redefinition of PIN_IN removed
 
 void setup() {
-  pinMode(PIN_OUT_VAL, OUTPUT);
-  pinMode(PIN_IN_VAL, INPUT);
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
 }
 
 void loop() {
   // Discharge
-  digitalWrite(PIN_OUT_VAL, LOW);
+  digitalWrite(PIN_OUT, LOW);
   delay(1000);
 
   // Charge
-  digitalWrite(PIN_OUT_VAL, HIGH);
+  digitalWrite(PIN_OUT, HIGH);
   delay(500);
 
   // Measure decay
-  digitalWrite(PIN_OUT_VAL, LOW);
+  digitalWrite(PIN_OUT, LOW);
   unsigned long startT = micros();
 
   float y_sum = 0, x_sum = 0, xy_sum = 0, x2_sum = 0;
@@ -34,7 +33,7 @@ void loop() {
   int n = 0;
 
   for (int i = 0; i < 20; i++) {
-    int raw = analogRead(PIN_IN_VAL);
+    int raw = analogRead(PIN_IN);
     unsigned long t = micros() - startT;
     float v = (raw * VCC) / 1023.0;
 
@@ -64,7 +63,7 @@ void loop() {
 
     float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
     Serial.print("Tau_s:"); Serial.print(tau);
-    Serial.print(" R2_Ohm:"); Serial.println(r2);
+    Serial.print(" R2_Est:"); Serial.println(r2);
   } else {
     Serial.println("Error: Insufficient Data");
   }

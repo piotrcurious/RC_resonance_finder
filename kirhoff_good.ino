@@ -1,68 +1,16 @@
-/*
- * Improved Kirchhoff-based measurement in kirhoff_good.ino.
- * Uses 2nd-order RC ladder theory and Golden Section search for stable gain point.
- */
+#include "src/RCConfig.h"
+#include "src/RCLadder.h"
 
-#include "RCConfig.h"
-
-float measureVpp(float freq);
+RCLadder meter(PIN_OUT, PIN_IN, R1, C1, C2, R0);
 
 void setup() {
-  pinMode(PIN_OUT, OUTPUT);
-  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
 }
 
-float measureVpp(float freq) {
-  unsigned long period = 1000000.0 / freq;
-  unsigned long half = period / 2;
-  float vMax = -1.0, vMin = 6.0;
-  unsigned long start = millis();
-  unsigned long window = 300; if (period > 150000) window = (period * 2.0) / 1000;
-  while(millis() - start < window) {
-    digitalWrite(PIN_OUT, HIGH);
-    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    float v = (analogRead(PIN_IN) * 5.0) / 1023.0;
-    if (v > vMax) vMax = v;
-    digitalWrite(PIN_OUT, LOW);
-    if (half > 16000) delay(half/1000); else delayMicroseconds(half);
-    v = (analogRead(PIN_IN) * 5.0) / 1023.0;
-    if (v < vMin) vMin = v;
-  }
-  return vMax - vMin;
-}
-
 void loop() {
-  float targetVpp = 3.6;
-  float a = 0.05, b = 2000.0;
-  const float invphi = 0.618033988;
-  const float invphi2 = 0.381966011;
-
-  float h = b - a;
-  float c = a + invphi2 * h;
-  float d = a + invphi * h;
-  float yc = abs(measureVpp(c) - targetVpp);
-  float yd = abs(measureVpp(d) - targetVpp);
-  
-  for (int i = 0; i < 12; i++) {
-    if (yc < yd) {
-      b = d; d = c; yd = yc; h = b - a;
-      c = a + invphi2 * h; yc = abs(measureVpp(c) - targetVpp);
-    } else {
-      a = c; c = d; yc = yd; h = b - a;
-      d = a + invphi * h; yd = abs(measureVpp(d) - targetVpp);
-    }
-  }
-  
-  float bestF = (a + b) / 2.0;
-  float vpp = measureVpp(bestF);
-  float ratio = vpp / 5.0;
-  if (ratio < 0.99 && ratio > 0.01) {
-    float artanh_val = 0.5 * log((1.0 + ratio) / (1.0 - ratio));
-    float tau = 1.0 / (4.0 * bestF * artanh_val);
-    float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
-    Serial.print("Freq_Hz:"); Serial.print(bestF);
-    Serial.print(" R2_Ohm:"); Serial.println(r2);
-  }
+  float f = 20.0;
+  float vpp = meter.measureVpp(f);
+  float r2 = meter.solveR2(f, vpp);
+  Serial.print("R2_Est:"); Serial.println(r2);
   delay(60000);
 }
