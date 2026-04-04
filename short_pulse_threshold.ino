@@ -30,7 +30,7 @@ void loop() {
 
   float threshold = 3.16; // 5.0 * (1 - 1/e) approx
   while(analogRead(PIN_IN_VAL) * (5.0/1023.0) < threshold) {
-    if (micros() - start > 5000000) break; // Timeout
+    if (micros() - start > 100000) break; // Timeout
   }
   unsigned long duration = micros() - start;
 
@@ -40,7 +40,7 @@ void loop() {
   float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
 
   Serial.print("Charge time: "); Serial.print(duration);
-  Serial.print(" us, Calc R2: "); Serial.println(r2);
+  Serial.print(" us, Calc R2_Raw: "); Serial.println(r2);
 
   delay(60000);
 }

@@ -75,6 +75,6 @@ void loop() {
     estimatedR = estimatedR + K * (measR - estimatedR);
     P = (1 - K) * P;
     
-    Serial.print("R_est: "); Serial.println(estimatedR);
+    Serial.print("R2_Est: "); Serial.println(estimatedR);
   }
 }

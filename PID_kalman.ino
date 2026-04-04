@@ -62,9 +62,9 @@ void loop() {
     float artanh_val = 0.5 * log((1.0 + vpp/VCC) / (1.0 - vpp/VCC));
     float tau = 1.0 / (4.0 * currentFreq * artanh_val);
     float r2 = (tau - (R0+R1)*(C1+C2)) / C2;
-    Serial.print("Freq: "); Serial.print(currentFreq);
+    Serial.print("Freq_Hz: "); Serial.print(currentFreq);
     Serial.print(" Hz, Vpp: "); Serial.print(vpp);
-    Serial.print(" V, R2: "); Serial.println(r2);
+    Serial.print(" V, R2_Raw: "); Serial.println(r2);
   }
 
   delay(100);

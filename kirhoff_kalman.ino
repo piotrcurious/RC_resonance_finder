@@ -67,7 +67,7 @@ void loop() {
     float tau = 1.0 / (4.0 * freq * artanh_val);
     float measR = (tau - (R0+R1)*(C1+C2)) / C2;
     updateKalman(measR);
-    Serial.print("R_est:"); Serial.println(x_state[0]);
+    Serial.print("R2_Est:"); Serial.println(x_state[0]);
   }
   delay(60000);
 }
