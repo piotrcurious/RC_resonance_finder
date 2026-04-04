@@ -23,9 +23,10 @@ class MockSerial {
 public:
     void begin(unsigned long baud) {}
     template<typename T> void print(T val) { std::cout << val; }
-    template<typename T> void println(T val) { std::cout << val << "\n"; }
+    template<typename T> void println(T val) { std::cout << val << std::endl; }
     void println() { std::cout << "\n"; }
 };
 extern MockSerial Serial;
 void setPhysicsR2(float r2);
+void advanceMillis(unsigned long ms);
 #endif

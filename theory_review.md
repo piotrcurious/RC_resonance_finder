@@ -1,47 +1,55 @@
-# Theory Review: RC Ladder Resistance Measurement
+# Theory Review: 2nd-Order RC Ladder for R2 Measurement
 
-## Circuit Model
-The circuit is a 2nd-order RC ladder:
-- **Input:** Arduino Digital Pin (Vin)
-- **Internal Resistance:** R0 = 250 $\Omega$
-- **Stage 1:** Known R1 = 1 $\Omega$, C1 = 0.5 $\mu$F
-- **Stage 2:** Unknown R2, Known C2 = 10 $\mu$F
-- **Measurement:** Analog Pin A0 across C2.
+## Circuit Topology
+The circuit is a 2nd-order passive RC ladder:
+`Vin -- (R0+R1) --+-- R2 --+-- A0`
+                  |        |
+                 C1       C2
+                  |        |
+                 GND      GND
 
-Topology:
-`Vin -- (R0 + R1) -- Node1 -- R2 -- Node2(A0) -- GND`
-`                    |             |`
-`                    C1            C2`
-`                    |             |`
-`                   GND           GND`
-
-Total resistance of stage 1: $R_a = R0 + R1 = 251 \Omega$.
-Time constants:
-- $\tau_1 \approx R_a C_1 = 251 \cdot 0.5 \cdot 10^{-6} \approx 125.5 \mu$s.
-- $\tau_2 = R_2 C_2$. For $R_2 = 1k\Omega$, $\tau_2 = 10$ ms.
-
-Since $\tau_2 \gg \tau_1$, the stages are somewhat decoupled in frequency.
+Where:
+- $R_{in} = R_0 + R_1 = 250\Omega + 1\Omega = 251\Omega$
+- $C_1 = 0.5\mu F$
+- $C_2 = 10\mu F$
+- $R_2$ is the unknown resistance.
 
 ## Transfer Function
-$H(s) = \frac{V_{C2}(s)}{V_{in}(s)} = \frac{1}{s^2(R_a R_2 C_1 C_2) + s(R_a C_1 + R_a C_2 + R_2 C_2) + 1}$
+The Laplace transform transfer function $H(s) = \frac{V_{A0}(s)}{V_{in}(s)}$ is:
+$$H(s) = \frac{1}{a s^2 + b s + 1}$$
+Where:
+- $a = R_{in} R_2 C_1 C_2$
+- $b = R_{in} C_1 + R_{in} C_2 + R_2 C_2$
 
-## Misconceptions in original assumptions
-1. **Resonance:** A passive RC ladder does not have a "resonant frequency" in the sense of a voltage gain peak. The gain is maximum at DC (0 Hz) and decreases monotonically.
-2. **Binary Search for Peak:** Searching for a peak in Vpp or Vavg will fail as it will always lead to the lowest possible frequency.
-3. **Kirchhoff Equation:** The equation $V_{c2} = V_{cc} \frac{Z_{c2}}{R_0 + R_2 + Z_{c2}}$ provided in `assumptions.txt` is for a 1st-order RC circuit and ignores R1 and C1.
+## Frequency Response
+The magnitude response $|H(j\omega)|$ is:
+$$|H(j\omega)| = \frac{1}{\sqrt{(1 - a\omega^2)^2 + (b\omega)^2}}$$
+The phase response $\phi(\omega)$ is:
+$$\phi(\omega) = -\arctan\left(\frac{b\omega}{1 - a\omega^2}\right)$$
 
-## Proposed Measurement Strategy
-Instead of searching for a peak, we should:
-1. **Time Domain:** Measure the step response. Set Vin HIGH and measure the time it takes for $V_{C2}$ to cross a threshold (e.g., 2.5V).
-2. **Frequency Domain (Phase):** Measure the phase shift of the output relative to the input square wave. At a frequency $f$, the phase shift is $\angle H(j 2 \pi f)$.
-3. **Frequency Domain (Amplitude):** Measure the peak-to-peak voltage of $V_{C2}$ at a known frequency.
+## Measurement Strategies
 
-Given the prompt's emphasis on "frequency corresponding to... maximum", it's possible they meant the frequency where the **swing** is largest relative to some other factor, or they are just wrong. I will implement a robust time-constant measurement or amplitude-based measurement.
+### 1. Dominant Time Constant (OCTC)
+Since the system is heavily overdamped ($b^2 \gg 4a$), the step response is dominated by a single time constant $\tau \approx b$.
+$$\tau = R_{in}(C_1 + C_2) + R_2 C_2$$
+Solving for $R_2$:
+$$R_2 = \frac{\tau - R_{in}(C_1 + C_2)}{C_2}$$
 
-To stay somewhat true to the "search" idea, we can search for the frequency where the phase shift is exactly 90 degrees (for the 2nd order system) or 45 degrees. For a 2nd order RC, the phase goes from 0 to 180 degrees. 90 degrees is a good target.
+### 2. Gain at Specific Frequency
+By measuring $V_{pp\_out}$ and $V_{pp\_in}$ at a known frequency $f$:
+$$G = \frac{V_{pp\_out}}{V_{pp\_in}}$$
+$$G^2 = \frac{1}{(1 - a\omega^2)^2 + (b\omega)^2}$$
+Substitute $a = (R_{in} C_1 C_2) R_2$ and $b = R_{in}(C_1+C_2) + C_2 R_2$.
+This is a quadratic equation in $R_2$ which can be solved.
 
-## Kalman Filter
-The Kalman filter will track $R_2$.
-State: $x = R_2$.
-Measurement: $z = \text{calculated } R_2 \text{ from a single measurement}$.
-Or better: $z = V_{pp}$ and $h(x)$ is the theoretical $V_{pp}$ for a given $R_2$.
+### 3. Phase Shift
+Measuring the time delay $\Delta t$ between $V_{in}$ and $V_{A0}$:
+$$\phi = -2\pi f \Delta t$$
+$$\tan(-\phi) = \frac{b\omega}{1 - a\omega^2}$$
+Again, this leads to a solvable equation for $R_2$.
+
+## Constraints & Realities
+- **No Resonance:** Passive RC circuits cannot have a gain peak (>1). The "resonance" terminology in some files refers to the frequency where phase is $-90^\circ$ (which occurs when $1 - a\omega^2 = 0$) or simply a characteristic frequency.
+- **Internal Resistance:** $R_0 = 250\Omega$ is a significant part of the input impedance and must be included.
+- **Sampling Rate:** Arduino `analogRead` is ~100µs. High frequency measurements require optimized code or PWM-based steady-state analysis.
+- **Precision:** Use Kahan summation for averaging and Kalman filtering for noise reduction.

@@ -66,6 +66,11 @@ float RCLadder::solveR2(float freq, float vpp) {
   float r2 = (tau - ra * (_c1 + _c2)) / _c2;
   return (r2 < 0.1) ? 0.1 : r2;
 }
+float RCLadder::solveR2OCTC(float tau) {
+  float ra = _r0 + _r1;
+  float r2 = (tau - ra * (_c1 + _c2)) / _c2;
+  return (r2 < 0.1) ? 0.1 : r2;
+}
 void RCLadder::updateKalman(float measurement) {
   _x[0] += _x[1];
   _P[0][0] += _P[1][1] + _Q[0][0];

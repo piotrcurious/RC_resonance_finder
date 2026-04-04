@@ -3,8 +3,8 @@
  * Uses a lower threshold (1.0V) and sub-microsecond interpolation for better precision.
  */
 
-#include "RCConfig.h"
-#include "RCLadder.h"
+#include "src/RCConfig.h"
+#include "src/RCLadder.h"
 
 RCLadder meter(PIN_OUT, PIN_IN, R1, C1, C2, R0);
 
@@ -37,7 +37,7 @@ void loop() {
   float r2 = 1.0 / (w * w * (R0+R1) * C1 * C2);
 
   Serial.print("Phase90_Freq_Hz:"); Serial.print(targetF);
-  Serial.print(" R2_Ohm:"); Serial.println(r2);
+  Serial.print(" R2_Est:"); Serial.println(r2);
 
   delay(60000);
 }

@@ -1,11 +1,11 @@
 float measureVpp(float freq);
-#include "RCConfig.h"
+#include "src/RCConfig.h"
 /*
  * calibrate_system.ino - Helps calibrate Arduino pin resistance R0.
  * Instructions: Connect a known reference resistor (e.g., 1k) as R2.
  */
 
-#include "RCLadder.h"
+#include "src/RCLadder.h"
 
 // Define with a default R0 = 0 to see the total path resistance
 RCLadder meter(3, A0, 1.0, 0.5e-6, 10.0e-6, 0.0);

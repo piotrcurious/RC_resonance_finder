@@ -1,14 +1,13 @@
 float measureVpp(float freq);
-#include "RCConfig.h"
+#include "src/RCConfig.h"
 /*
  * Kalman filter measurement in CRC_circuit_kalman_converging.ino.
  * Uses 2nd-order RC ladder theory and 2nd-order Kalman filter for R2 tracking.
  */
 
 #include <math.h>
-
-const int PIN_OUT_VAL = 3;
-const int PIN_IN_VAL = A0;
+// Redefinition of PIN_OUT removed
+// Redefinition of PIN_IN removed
 
 // Kalman Filter variables (R2 and dR2)
 float x_state[2] = {1000.0, 0.0};
@@ -17,8 +16,8 @@ float Q_proc[2][2] = {{10.0, 0}, {0, 1.0}};
 float R_meas = 500.0;
 
 void setup() {
-  pinMode(PIN_OUT_VAL, OUTPUT);
-  pinMode(PIN_IN_VAL, INPUT);
+  pinMode(PIN_OUT, OUTPUT);
+  pinMode(PIN_IN, INPUT);
   Serial.begin(9600);
 }
 
@@ -32,11 +31,11 @@ float measureVpp(float freq) {
   float vMax = 0, vMin = 5.0;
   unsigned long s = millis();
   while(millis() - s < 150) {
-    digitalWrite(PIN_OUT_VAL, HIGH); safeDelayMicros(half);
-    float v = analogRead(PIN_IN_VAL) * (VCC/1023.0);
+    digitalWrite(PIN_OUT, HIGH); safeDelayMicros(half);
+    float v = analogRead(PIN_IN) * (VCC/1023.0);
     if (v > vMax) vMax = v;
-    digitalWrite(PIN_OUT_VAL, LOW); safeDelayMicros(half);
-    v = analogRead(PIN_IN_VAL) * (VCC/1023.0);
+    digitalWrite(PIN_OUT, LOW); safeDelayMicros(half);
+    v = analogRead(PIN_IN) * (VCC/1023.0);
     if (v < vMin) vMin = v;
   }
   return vMax - vMin;
@@ -76,7 +75,7 @@ void loop() {
     float tau = 1.0 / (4.0 * lastF * artanh_val);
     float measR = (tau - (R0+R1)*(C1+C2)) / C2;
     updateKalman(measR);
-    Serial.print("R2_Est: "); Serial.println(x_state[0]);
+    Serial.print("R2_Est:"); Serial.println(x_state[0]);
   }
   delay(60000);
 }
